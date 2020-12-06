@@ -13,7 +13,7 @@ Path-Space Differentiable Renderer
 
    core_intro
    core_compile
-   → GitHub <https://github.com/uci-rendering/psdr/>
+   → GitHub <https://github.com/uci-rendering/psdr-cuda/>
 
 .. toctree::
    :maxdepth: 1
