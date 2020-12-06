@@ -1,9 +1,0 @@
-[submodule "ext/enoki"]
-	path = ext/enoki
-	url = https://github.com/mitsuba-renderer/enoki.git
-[submodule "ext/pybind11"]
-	path = ext/pybind11
-	url = https://github.com/pybind/pybind11.git
-[submodule "ext/openexr"]
-	path = ext/openexr
-	url = https://github.com/AcademySoftwareFoundation/openexr.git
