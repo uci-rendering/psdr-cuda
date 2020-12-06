@@ -1,0 +1,8 @@
+*.o
+*.so
+__pycache__
+build/
+ext/
+ext_win64/
+local/
+examples/outputs/

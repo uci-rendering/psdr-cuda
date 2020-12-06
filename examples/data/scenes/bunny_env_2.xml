@@ -1,0 +1,57 @@
+<?xml version='1.0' encoding='utf-8'?>
+
+<scene version="0.5.0">
+    <integrator type="direct"/>
+
+    <sensor type="perspective">
+        <float name="focus_distance" value="100.012"/>
+        <float name="fov" value="20"/>
+        <string name="fov_axis" value="x"/>
+        <float name="near_clip" value="0.01"/>
+        <transform name="to_world">
+            <lookat target="14.0765, -59.0563, 80.8849" origin="14.1213, -59.6987, 81.65" up="-0.00390582, 0.765772, 0.643101"/>
+        </transform>
+
+        <sampler type="independent">
+            <integer name="sampleCount" value="32"/>
+        </sampler>
+
+        <film type="hdrfilm">
+            <boolean name="banner" value="false"/>
+            <integer name="height" value="270"/>
+            <integer name="width" value="480"/>
+
+            <rfilter type="box"/>
+        </film>
+    </sensor>
+
+    <bsdf type="diffuse" id="floor">
+        <rgb name="reflectance" value="0.7, 0.7, 0.7"/>
+    </bsdf>
+
+    <bsdf type="diffuse" id="tree">
+        <rgb name="reflectance" value="0.4, 0.4, 0.4"/>
+    </bsdf>
+
+    <emitter type="envmap">
+        <string name="filename" value="./data/envmaps/ballroom_1k.exr"/>
+        <transform name='to_world'>
+            <rotate x='1.0' angle='90'/>
+        </transform>
+    </emitter>
+
+    <shape type="obj">
+        <string name="filename" value="./data/objects/bunny/bunny_low.obj"/>
+        <transform name='to_world'>
+            <rotate x='1.0' angle='90'/>
+            <scale x='.12' y='.12' z='.12'/>
+            <translate z="5.5" y="4"/>
+        </transform>
+        <ref id="tree"/>
+    </shape>
+
+    <shape type="obj">
+        <string name="filename" value="./data/objects/tree/plane.obj"/>
+        <ref id="floor"/>
+    </shape>
+</scene>
