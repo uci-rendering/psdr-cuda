@@ -20,9 +20,9 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMake" ${CMAKE_MODULE_PATH})
 if( WIN32 )
     set(ENOKI_DIR ${CMAKE_SOURCE_DIR}/ext_win64/enoki)
     set(PYBIND11_ROOT ${CMAKE_SOURCE_DIR}/ext_win64/pybind11)
+    # set(PYTHON_ROOT C:/ProgramData/Miniconda3)
     if ( NOT PYTHON_ROOT )
-        # set(PYTHON_ROOT C:/Users/Shuang/Anaconda3)
-        message(FATAL_ERROR "PYTHON_ROOT not set!")
+        message(FATAL_ERROR "PYTHON_ROOT not set!, check CMakeLists.txt line 23")
     endif()
 else()
     if ( NOT ENOKI_DIR )
@@ -58,17 +58,6 @@ else()
 endif()
 find_package(OptiX REQUIRED)
 
-if( WIN32 )
-    set(OpenEXR_INCLUDE_DIR     ${CMAKE_SOURCE_DIR}/ext_win64/openexr/include/OpenEXR)
-    set(OpenEXR_LIB_DIR         ${CMAKE_SOURCE_DIR}/ext_win64/openexr/lib)
-    set(OpenEXR_LIBRARIES       Half-2_5 Iex-2_5 IexMath-2_5 IlmImf-2_5 IlmImfUtil-2_5 IlmThread-2_5 Imath-2_5)
-else()
-    if ( NOT OpenEXR_ROOT )
-        message(FATAL_ERROR "OpenEXR_ROOT not set!")
-    endif()
-    find_package(OpenEXR 2.3.0 REQUIRED)
-endif()
-
 set(CUDA_GENERATED_OUTPUT_DIR "${CMAKE_BINARY_DIR}/lib/ptx")
 
 if( WIN32 )
@@ -80,7 +69,6 @@ if( WIN32 )
         ${CMAKE_BINARY_DIR}/include
         ${CMAKE_CURRENT_BINARY_DIR}
         ${CUDA_INCLUDE_DIRS}
-        ${OpenEXR_INCLUDE_DIR}
         ${PYTHON_ROOT}/include
         ${ENOKI_DIR}/include
         ${PYBIND11_ROOT}/include
@@ -88,7 +76,6 @@ if( WIN32 )
     link_directories(
         ${ENOKI_DIR}/lib
         ${PYTHON_ROOT}/libs
-        ${OpenEXR_LIB_DIR}
     )
 else()
     include_directories(
@@ -99,7 +86,6 @@ else()
         "${CMAKE_BINARY_DIR}/include"
         ${CMAKE_CURRENT_BINARY_DIR}
         ${CUDA_INCLUDE_DIRS}
-        ${OpenEXR_INCLUDE_DIR}
         ${PYTHON_INCLUDE_PATH}
         ${ENOKI_DIR}/include
     )
@@ -156,6 +142,9 @@ set(PSDR_SOURCE_FILES
     ${PSDR_SOURCE_DIR}/core/bitmap.cpp
     ${PSDR_INCLUDE_DIR}/core/bitmap_loader.h
     ${PSDR_SOURCE_DIR}/core/bitmap_loader.cpp
+    ${PSDR_INCLUDE_DIR}/core/tinyexr.h
+    ${PSDR_INCLUDE_DIR}/core/miniz.h
+    ${PSDR_SOURCE_DIR}/core/miniz.cpp
     ${PSDR_INCLUDE_DIR}/core/sampler.h
     ${PSDR_SOURCE_DIR}/core/sampler.cpp
     ${PSDR_INCLUDE_DIR}/core/pmf.h
@@ -205,11 +194,11 @@ set(PSDR_SOURCE_FILES
 if( WIN32 )
     add_subdirectory(${PYBIND11_ROOT})
     pybind11_add_module(psdr_cuda ${PSDR_SOURCE_FILES})
-    target_compile_options(psdr_cuda PRIVATE /O2 /wd4251)
-    target_link_libraries(psdr_cuda PRIVATE ${PYPSDR_LIBRARIES} ${CUDA_LIBRARIES} ${OpenEXR_LIBRARIES})
+    target_compile_options(psdr_cuda PRIVATE /O2 /wd4251 /MP)
+    target_link_libraries(psdr_cuda PRIVATE ${PYPSDR_LIBRARIES} ${CUDA_LIBRARIES})
 else()
     cuda_add_library(psdr_cuda MODULE ${PSDR_SOURCE_FILES})
-    target_link_libraries(psdr_cuda ${PYPSDR_LIBRARIES} ${CUDA_LIBRARIES} ${OpenEXR_LIBRARIES})
+    target_link_libraries(psdr_cuda ${PYPSDR_LIBRARIES} ${CUDA_LIBRARIES})
 endif()
 
 
