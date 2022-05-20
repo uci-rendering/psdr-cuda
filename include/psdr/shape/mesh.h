@@ -13,6 +13,9 @@ public:
     ~Mesh() override;
 
     void load(const char *fname, bool verbose = false);
+    void load_mem(const Vector3fD &vertex_positions, const Vector3iD &face_indices,
+                  const Vector2fD &vertex_uv = Vector2fD(), const Vector3iD &face_uv_indices = Vector3iD(),
+                  bool verbose = false);
     void configure();
     void prepare_optix_buffers();
 

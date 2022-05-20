@@ -67,6 +67,21 @@ void Scene::reload_mesh(Mesh& mesh, const char *file_name, bool verbose) {
 }
 
 
+void Scene::reload_mesh_mem(Mesh &mesh, const Vector3fD &vertex_positions, const Vector3iD &face_indices,
+                            const Vector2fD &vertex_uv, const Vector3iD &face_uv_indices, bool verbose) {
+    mesh.load_mem(vertex_positions, face_indices, vertex_uv, face_uv_indices, verbose);
+    if ( m_has_bound_mesh ) {
+        Mesh* bound_mesh = m_meshes.back();
+        delete bound_mesh;
+        m_meshes.pop_back();
+        m_num_meshes--;
+        m_has_bound_mesh = false;
+    }
+    delete m_optix;
+    m_optix = new Scene_OptiX();
+}
+
+
 void Scene::configure() {
     PSDR_ASSERT_MSG(m_loaded, "Scene not loaded yet!");
     PSDR_ASSERT(m_num_sensors == static_cast<int>(m_sensors.size()));
