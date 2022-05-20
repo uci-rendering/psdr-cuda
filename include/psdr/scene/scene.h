@@ -19,6 +19,8 @@ public:
     void load_file(const char *file_name, bool auto_configure = true);
     void load_string(const char *scene_xml, bool auto_configure = true);
 
+    void reload_mesh(Mesh& mesh, const char *file_name, bool verbose=false);
+
     void configure();
     bool is_ready() const;
 

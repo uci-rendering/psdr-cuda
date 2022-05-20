@@ -270,6 +270,7 @@ PYBIND11_MODULE(psdr_cuda, m) {
         .def(py::init<>())
         .def("load_file", &Scene::load_file, "file_name"_a, "auto_configure"_a = true)
         .def("load_string", &Scene::load_string, "scene_xml"_a, "auto_configure"_a = true)
+        .def("reload_mesh", &Scene::reload_mesh, "mesh"_a, "file_name"_a, "verbose"_a = false)
         .def("configure", &Scene::configure)
         .def("sample_boundary_segment_direct", &Scene::sample_boundary_segment_direct, "sample3"_a, "active"_a = true)
         .def_readwrite("opts", &Scene::m_opts, "Render options")
