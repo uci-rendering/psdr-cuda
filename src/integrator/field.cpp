@@ -3,6 +3,8 @@
 #include <psdr/core/intersection.h>
 #include <psdr/scene/scene.h>
 #include <psdr/integrator/field.h>
+#include <psdr/shape/mesh.h>
+#include <psdr/bsdf/bsdf.h>
 
 namespace psdr
 {
@@ -34,6 +36,12 @@ template <bool ad>
 Spectrum<ad> FieldExtractionIntegrator::__Li(const Scene &scene, const Ray<ad> &ray, Mask<ad> active) const {
     Intersection<ad> its = scene.ray_intersect<ad>(ray);
     Vector3f<ad> result;
+
+    BSDFArray<ad> bsdf_array = its.shape->bsdf(active);
+    if ( scene.m_emitter_env != nullptr ) {
+        // Skip reflectance computations for intersections on the bounding mesh
+        active &= neq(bsdf_array, nullptr);
+    }
 
     if ( m_field == "silhouette" ) {
         result = full<Spectrum<ad>>(1.f);
