@@ -32,6 +32,8 @@ struct Bitmap {
 
     template <bool ad> Value<ad> eval(Vector2f<ad> uv, bool flip_v = true) const;
 
+    template <bool ad> Value<ad> at(Int<ad> idx) const;
+
     ScalarVector2i m_resolution;
     ValueD m_data;
 };

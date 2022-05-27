@@ -43,6 +43,11 @@ static std::pair<TriangleInfo<ad>, Vector3f<ad>> process_mesh(const Vector3f<ad>
     triangles.n1 = gather<Vector3f<ad>>(vertex_normals, face_indices[1]);
     triangles.n2 = gather<Vector3f<ad>>(vertex_normals, face_indices[2]);
 
+    // Store the index of each vertex
+    triangles.v0_idx = face_indices[0];
+    triangles.v1_idx = face_indices[1];
+    triangles.v2_idx = face_indices[2];
+
     // Normalize the face normals
     face_normals /= face_areas;
     face_areas *= 0.5f;

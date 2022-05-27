@@ -89,6 +89,20 @@ typename Bitmap<channels>::template Value<ad> Bitmap<channels>::eval(Vector2f<ad
 }
 
 
+template <int channels>
+template <bool ad>
+typename Bitmap<channels>::template Value<ad> Bitmap<channels>::at(Int<ad> idx) const {
+    const int width = m_resolution.x(), height = m_resolution.y();
+    if( !all(idx < width * height) )
+        throw Exception("Bitmap: out-of-bound access!");
+
+    if constexpr( ad )
+        return gather<ValueD>(m_data, idx);
+    else
+        return gather<ValueC>(detach(m_data), idx);
+}
+
+
 // Explicit instantiations
 template struct Bitmap<1>;
 template struct Bitmap<3>;
@@ -98,5 +112,11 @@ template FloatD Bitmap<1>::eval<true>(Vector2fD, bool) const;
 
 template Vector3fC Bitmap<3>::eval<false>(Vector2fC, bool) const;
 template Vector3fD Bitmap<3>::eval<true>(Vector2fD, bool) const;
+
+template FloatC Bitmap<1>::at<false>(IntC) const;
+template FloatD Bitmap<1>::at<true>(IntD) const;
+
+template Vector3fC Bitmap<3>::at<false>(IntC) const;
+template Vector3fD Bitmap<3>::at<true>(IntD) const;
 
 } // namespace psdr
