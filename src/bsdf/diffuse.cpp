@@ -29,17 +29,7 @@ Spectrum<ad> Diffuse::__eval(const Intersection<ad> &its, const Vector3f<ad> &wo
 
     active &= (cos_theta_i > 0.f && cos_theta_o > 0.f);
 
-    Spectrum<ad> value;
-    auto& res = m_reflectance.m_resolution;
-    if( res.x() == 1 && res.y() > 1 ) {
-        Vector3f<ad> c0 = m_reflectance.at<ad>(its.v0_idx);
-        Vector3f<ad> c1 = m_reflectance.at<ad>(its.v1_idx);
-        Vector3f<ad> c2 = m_reflectance.at<ad>(its.v2_idx);
-        Vector3f<ad> color = bilinear<ad>(c0, c1-c0, c2-c0, its.barycentric_uv);
-        value = color * InvPi * cos_theta_o;
-    }
-    else
-        value = m_reflectance.eval<ad>(its.uv) * InvPi * cos_theta_o;
+    Spectrum<ad> value = m_reflectance.sample<ad>(its) * InvPi * cos_theta_o;
 
     return value & active;
 }

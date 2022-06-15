@@ -2,7 +2,7 @@
 
 #include <psdr/psdr.h>
 #include <misc/Exception.h>
-
+#include <psdr/core/intersection.h>
 
 namespace psdr
 {
@@ -33,6 +33,8 @@ struct Bitmap {
     template <bool ad> Value<ad> eval(Vector2f<ad> uv, bool flip_v = true) const;
 
     template <bool ad> Value<ad> at(Int<ad> idx) const;
+
+    template <bool ad> Value<ad> sample(const Intersection<ad>& its) const;
 
     ScalarVector2i m_resolution;
     ValueD m_data;
