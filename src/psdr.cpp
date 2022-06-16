@@ -106,6 +106,7 @@ PYBIND11_MODULE(psdr_cuda, m) {
         .def(py::init<const char*>())
         .def("load_openexr", &Bitmap1fD::load_openexr)
         .def("eval", &Bitmap1fD::eval<true>, "uv"_a, "flip_v"_a = true)
+        .def("at", &Bitmap1fD::at<true>, "idx"_a)
         .def_readwrite("resolution", &Bitmap1fD::m_resolution)
         .def_readwrite("data", &Bitmap1fD::m_data);
 
