@@ -29,7 +29,7 @@ Spectrum<ad> Diffuse::__eval(const Intersection<ad> &its, const Vector3f<ad> &wo
 
     active &= (cos_theta_i > 0.f && cos_theta_o > 0.f);
 
-    Spectrum<ad> value = m_reflectance.sample<ad>(its) * InvPi * cos_theta_o;
+    Spectrum<ad> value = m_reflectance.sample<ad>(its, active) * InvPi * cos_theta_o;
 
     return value & active;
 }

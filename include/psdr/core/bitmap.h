@@ -34,7 +34,7 @@ struct Bitmap {
 
     template <bool ad> Value<ad> at(Int<ad> idx) const;
 
-    template <bool ad> Value<ad> sample(const Intersection<ad>& its) const;
+    template <bool ad> Value<ad> sample(const Intersection<ad>& its, Mask<ad> active) const;
 
     ScalarVector2i m_resolution;
     ValueD m_data;

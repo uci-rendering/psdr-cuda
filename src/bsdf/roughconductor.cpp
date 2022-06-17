@@ -41,8 +41,8 @@ Spectrum<ad> RoughConductor::__eval(const Intersection<ad>& its, const Vector3f<
               cos_theta_o = Frame<ad>::cos_theta(wo);
     active &= cos_theta_i > 0.f && cos_theta_o > 0.f;
 
-    Float<ad> alpha_u = m_alpha_u.sample<ad>(its);
-    Float<ad> alpha_v = m_alpha_v.sample<ad>(its);
+    Float<ad> alpha_u = m_alpha_u.sample<ad>(its, active);
+    Float<ad> alpha_v = m_alpha_v.sample<ad>(its, active);
 
     GGXDistribution m_distr(alpha_u, alpha_v);
     Vector3f<ad> H = normalize(wo + its.wi);
@@ -50,9 +50,9 @@ Spectrum<ad> RoughConductor::__eval(const Intersection<ad>& its, const Vector3f<
     active &= neq(D, 0.f);
     Float<ad> G = m_distr.G<ad>(its.wi, wo, H);
     Spectrum<ad> result = D * G / (4.f * Frame<ad>::cos_theta(its.wi));
-    Spectrum<ad> F = fresnel<ad>(m_eta.sample<ad>(its),
-                                 m_k.sample<ad>(its), dot(its.wi, H));
-    Spectrum<ad> specular_reflectance = m_specular_reflectance.sample<ad>(its);
+    Spectrum<ad> F = fresnel<ad>(m_eta.sample<ad>(its, active),
+                                 m_k.sample<ad>(its, active), dot(its.wi, H));
+    Spectrum<ad> specular_reflectance = m_specular_reflectance.sample<ad>(its, active);
 
     return (F * result * specular_reflectance) & active;
 }
@@ -68,8 +68,8 @@ Float<ad> RoughConductor::__pdf(const Intersection<ad>& its, const Vector3f<ad>&
     active &= cos_theta_i > 0.f && cos_theta_o > 0.f &&
               dot(its.wi, m) > 0.f && dot(wo, m) > 0.f;
 
-    Float<ad> alpha_u = m_alpha_u.sample<ad>(its);
-    Float<ad> alpha_v = m_alpha_v.sample<ad>(its);
+    Float<ad> alpha_u = m_alpha_u.sample<ad>(its, active);
+    Float<ad> alpha_v = m_alpha_v.sample<ad>(its, active);
     GGXDistribution distr(alpha_u, alpha_v);
     Float<ad> result = distr.eval<ad>(m) * distr.smith_g1<ad>(its.wi, m) /
                        (4.f * cos_theta_i);
@@ -81,8 +81,8 @@ template <bool ad>
 BSDFSample<ad> RoughConductor::__sample(const Intersection<ad>& its, const Vector3f<ad>& sample, Mask<ad> active) const {
     BSDFSample<ad> bs;
     Float<ad> cos_theta_i = Frame<ad>::cos_theta(its.wi);
-    Float<ad> alpha_u = m_alpha_u.sample<ad>(its);
-    Float<ad> alpha_v = m_alpha_v.sample<ad>(its);
+    Float<ad> alpha_u = m_alpha_u.sample<ad>(its, active);
+    Float<ad> alpha_v = m_alpha_v.sample<ad>(its, active);
     GGXDistribution distr(alpha_u, alpha_v);
 
     Vector3f<ad> wo = distr.sample<ad>(its.wi, sample);

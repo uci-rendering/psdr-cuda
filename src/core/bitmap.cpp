@@ -105,18 +105,18 @@ typename Bitmap<channels>::template Value<ad> Bitmap<channels>::at(Int<ad> idx) 
 
 template <int channels>
 template <bool ad>
-typename Bitmap<channels>::template Value<ad> Bitmap<channels>::sample(const Intersection<ad> &its) const {
+typename Bitmap<channels>::template Value<ad> Bitmap<channels>::sample(const Intersection<ad> &its, Mask<ad> active) const {
     Value<ad> value;
     if( m_resolution.x() == 1 && m_resolution.y() > 1 ) {
-        Value<ad> c0 = at<ad>(its.v0_idx);
-        Value<ad> c1 = at<ad>(its.v1_idx);
-        Value<ad> c2 = at<ad>(its.v2_idx);
-        const auto& st = its.barycentric_uv;
+        Value<ad> c0 = at<ad>(its.v0_idx & active);
+        Value<ad> c1 = at<ad>(its.v1_idx & active);
+        Value<ad> c2 = at<ad>(its.v2_idx & active);
+        const auto& st = its.barycentric_uv & active;
         value = fmadd(c1-c0, st.x(), fmadd(c2-c0, st.y(), c0));
     }
     else
         value = eval<ad>(its.uv);
-    return value;
+    return value & active;
 }
 
 
@@ -136,10 +136,10 @@ template FloatD Bitmap<1>::at<true>(IntD) const;
 template Vector3fC Bitmap<3>::at<false>(IntC) const;
 template Vector3fD Bitmap<3>::at<true>(IntD) const;
 
-template FloatC Bitmap<1>::sample<false>(const IntersectionC &its) const;
-template FloatD Bitmap<1>::sample<true>(const IntersectionD &its) const;
+template FloatC Bitmap<1>::sample<false>(const IntersectionC &its, MaskC active) const;
+template FloatD Bitmap<1>::sample<true>(const IntersectionD &its, MaskD active) const;
 
-template Vector3fC Bitmap<3>::sample<false>(const IntersectionC &its) const;
-template Vector3fD Bitmap<3>::sample<true>(const IntersectionD &its) const;
+template Vector3fC Bitmap<3>::sample<false>(const IntersectionC &its, MaskC active) const;
+template Vector3fD Bitmap<3>::sample<true>(const IntersectionD &its, MaskD active) const;
 
 } // namespace psdr
