@@ -83,4 +83,20 @@ Float<ad> Diffuse::__pdf(const Intersection<ad> &its, const Vector3f<ad> &wo, Ma
     return value & active;
 }
 
+
+SpectrumC Diffuse::albedo(const IntersectionC &its, MaskC active) const {
+    return __albedo<false>(its, active);
+}
+
+
+SpectrumD Diffuse::albedo(const IntersectionD &its, MaskD active) const {
+    return __albedo<true>(its, active);
+}
+
+
+template <bool ad>
+Spectrum<ad> Diffuse::__albedo(const Intersection<ad> &its, Mask<ad> active) const {
+    return m_reflectance.sample<ad>(its, active) & active;
+}
+
 } // namespace psdr

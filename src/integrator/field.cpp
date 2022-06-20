@@ -16,7 +16,8 @@ FieldExtractionIntegrator::FieldExtractionIntegrator(const char *field) : m_fiel
         m_field == "depth"      ||
         m_field == "geoNormal"  ||
         m_field == "shNormal"   ||
-        m_field == "uv",
+        m_field == "uv"         ||
+        m_field == "albedo",
         "Unsupported field: " + m_field
     );
 }
@@ -43,6 +44,8 @@ Spectrum<ad> FieldExtractionIntegrator::__Li(const Scene &scene, const Ray<ad> &
         active &= neq(bsdf_array, nullptr);
     }
 
+    active &= its.is_valid();
+
     if ( m_field == "silhouette" ) {
         result = full<Spectrum<ad>>(1.f);
     } else if ( m_field == "position" ) {
@@ -55,10 +58,13 @@ Spectrum<ad> FieldExtractionIntegrator::__Li(const Scene &scene, const Ray<ad> &
         result = its.sh_frame.n;
     } else if ( m_field == "uv" ) {
         result = concat(its.uv, 0.f);
-    } else {
+    } else if ( m_field == "albedo" ) {
+        result = bsdf_array->albedo(its, active);
+    }
+    else {
         PSDR_ASSERT(false);
     }
-    return result & (active && its.is_valid());
+    return result & active;
 }
 
 } // namespace psdr

@@ -34,6 +34,9 @@ public:
 
     bool anisotropic() const override { return m_anisotropic; }
 
+    SpectrumC albedo(const IntersectionC &its, MaskC active) const override;
+    SpectrumD albedo(const IntersectionD &its, MaskD active) const override;
+
     std::string to_string() const override { return std::string("RoughConductor[id=") + m_id + "]"; }
 
     Bitmap1fD m_alpha_u, m_alpha_v;
@@ -50,6 +53,9 @@ protected:
 
     template <bool ad>
     Float<ad> __pdf(const Intersection<ad> &, const Vector3f<ad> &, Mask<ad>) const;
+
+    template <bool ad>
+    Spectrum<ad> __albedo(const Intersection<ad>&, Mask<ad>) const;
 PSDR_CLASS_DECL_END(RoughConductor)
 
 } // namespace psdr

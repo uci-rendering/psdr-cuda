@@ -35,6 +35,16 @@ FloatD RoughConductor::pdf(const IntersectionD& its, const Vector3fD& wo, MaskD 
 }
 
 
+SpectrumC RoughConductor::albedo(const IntersectionC &its, MaskC active) const {
+    return __albedo<false>(its, active);
+}
+
+
+SpectrumD RoughConductor::albedo(const IntersectionD &its, MaskD active) const {
+    return __albedo<true>(its, active);
+}
+
+
 template <bool ad>
 Spectrum<ad> RoughConductor::__eval(const Intersection<ad>& its, const Vector3f<ad>& wo, Mask<ad> active) const {
     Float<ad> cos_theta_i = Frame<ad>::cos_theta(its.wi),
@@ -91,6 +101,12 @@ BSDFSample<ad> RoughConductor::__sample(const Intersection<ad>& its, const Vecto
     bs.pdf = pdf(its, bs.wo, active);
     bs.is_valid = (cos_theta_i > 0.f && neq(bs.pdf, 0.f) && Frame<ad>::cos_theta(bs.wo) > 0.f) & active;
     return bs;
+}
+
+
+template <bool ad>
+Spectrum<ad> RoughConductor::__albedo(const Intersection<ad>& its, Mask<ad> active) const {
+    return m_specular_reflectance.sample<ad>(its, active) & active;
 }
 
 } // namespace psdr
