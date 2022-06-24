@@ -99,4 +99,27 @@ Spectrum<ad> Diffuse::__albedo(const Intersection<ad> &its, Mask<ad> active) con
     return m_reflectance.sample<ad>(its, active) & active;
 }
 
+
+SpectrumC Diffuse::eval_demod(const IntersectionC &its, const Vector3fC &wo, MaskC active) const {
+    return __eval_demod<false>(its, wo, active);
+}
+
+
+SpectrumD Diffuse::eval_demod(const IntersectionD &its, const Vector3fD &wo, MaskD active) const {
+    return __eval_demod<true>(its, wo, active);
+}
+
+
+template <bool ad>
+Spectrum<ad> Diffuse::__eval_demod(const Intersection<ad> &its, const Vector3f<ad> &wo, Mask<ad> active) const {
+    Float<ad> cos_theta_i = Frame<ad>::cos_theta(its.wi),
+            cos_theta_o = Frame<ad>::cos_theta(wo);
+
+    active &= (cos_theta_i > 0.f && cos_theta_o > 0.f);
+
+    Spectrum<ad> value = InvPi * cos_theta_o;
+
+    return value & active;
+}
+
 } // namespace psdr

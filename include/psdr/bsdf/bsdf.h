@@ -37,6 +37,9 @@ public:
 
     virtual SpectrumC albedo(const IntersectionC &its, MaskC active) const = 0;
     virtual SpectrumD albedo(const IntersectionD &its, MaskD active) const = 0;
+
+    virtual SpectrumC eval_demod(const IntersectionC &its, const Vector3fC &wo, MaskC active = true) const = 0;
+    virtual SpectrumD eval_demod(const IntersectionD &its, const Vector3fD &wo, MaskD active = true) const = 0;
 PSDR_CLASS_DECL_END(BSDF)
 
 } // namespace psdr
@@ -49,4 +52,5 @@ ENOKI_CALL_SUPPORT_BEGIN(psdr::BSDF)
     ENOKI_CALL_SUPPORT_METHOD(pdf)
     ENOKI_CALL_SUPPORT_METHOD(anisotropic)
     ENOKI_CALL_SUPPORT_METHOD(albedo)
+    ENOKI_CALL_SUPPORT_METHOD(eval_demod)
 ENOKI_CALL_SUPPORT_END(psdr::BSDF)

@@ -32,6 +32,7 @@
 #include <psdr/integrator/integrator.h>
 #include <psdr/integrator/field.h>
 #include <psdr/integrator/direct.h>
+#include <psdr/integrator/directlighting.h>
 
 namespace py = pybind11;
 using namespace py::literals;
@@ -297,4 +298,7 @@ PYBIND11_MODULE(psdr_cuda, m) {
     py::class_<DirectIntegrator, Integrator>(m, "DirectIntegrator")
         .def(py::init<int, int>(), "bsdf_samples"_a = 1, "light_samples"_a = 1)
         .def_readwrite("hide_emitters", &DirectIntegrator::m_hide_emitters);
+
+    py::class_<DirectLightingIntegrator, DirectIntegrator>(m, "DirectLightingIntegrator")
+        .def(py::init<int, int>(), "bsdf_samples"_a = 1, "light_samples"_a = 1);
 }
