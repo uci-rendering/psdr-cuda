@@ -1,5 +1,4 @@
-# psdr-cuda
-Efficient Estimation of Boundary Integrals for Path-Space Differentiable Rendering
+# Efficient Estimation of Boundary Integrals for Path-Space Differentiable Rendering
 
 Paper Link: https://shuangz.com/projects/psdr-aq-sg22/
 
