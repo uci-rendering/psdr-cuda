@@ -10,5 +10,9 @@ Please follows the official documentation for building.
 # Example:
 
 To run an example
-'''cd examples && python psdr_test.py --test example''' 
-You can edit the '''config.py''' for more tests.
+
+```
+cd examples && python psdr_test.py --test example
+``` 
+
+You can edit the ```config.py``` for more tests.
