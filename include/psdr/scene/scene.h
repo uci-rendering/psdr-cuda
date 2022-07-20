@@ -35,6 +35,14 @@ public:
     Float<ad> emitter_position_pdf(const Vector3f<ad> &ref_p, const Intersection<ad> &its, Mask<ad> active = true) const;
 
     BoundarySegSampleDirect sample_boundary_segment_direct(const Vector3fC &sample3, MaskC active = true) const;
+    BoundarySegSampleDirect sample_edge_ray(const Vector3fC &sample3, MaskC active = true) const;
+    BoundarySegSampleDirect sample_emitter_ray(const Vector3fC &sample3, MaskC active = true) const;
+
+    FloatC is_valid_emitter_sampling(const Vector3fC &p0, const Vector3fC &dir) const;
+    FloatC is_valid_direction_sampling(const Vector3fC &p0, const Vector3fC &dir) const;
+
+
+    int seed = 0;
 
     std::string to_string() const override;
 
@@ -52,6 +60,8 @@ public:
     std::vector<Mesh*>      m_meshes;
     MeshArrayD              m_meshes_cuda;
 
+    EdgeSortOption          m_edge_sort;
+
     // Scene bounding box
     Vector3fC               m_lower, m_upper;
 
@@ -60,14 +70,16 @@ public:
     RenderOption            m_opts;
     mutable Sampler         *m_samplers;
 
-protected:
+// protected:
     TriangleInfoD           m_triangle_info;
     TriangleUVD             m_triangle_uv;
     MaskD                   m_triangle_face_normals;
     bool                    m_has_bound_mesh;
 
     SecondaryEdgeInfo       m_sec_edge_info;
-    DiscreteDistribution    *m_sec_edge_distrb;
+    DiscreteDistribution    *m_sec_edge_distrb; // for edge sampling and preprocess edge
+
+    IntC                    m_edge_cut;
 
     bool                    m_loaded;
     Scene_OptiX             *m_optix;

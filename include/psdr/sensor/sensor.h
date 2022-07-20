@@ -35,10 +35,29 @@ public:
 
     virtual PrimaryEdgeSample sample_primary_edge(const FloatC &sample1) const = 0;
 
+    inline void set_transform(const Matrix4fD &mat, bool set_left = true) {
+        if ( set_left ) {
+            m_to_world_left = mat;
+        } else {
+            m_to_world_right = mat;
+        }
+    }
+
+    inline void append_transform(const Matrix4fD &mat, bool append_left = true) {
+        if ( append_left ) {
+            m_to_world_left = mat*m_to_world_left;
+        } else {
+            m_to_world_right *= mat;
+        }
+    }
+
     ScalarVector2i          m_resolution;
     float                   m_aspect;
 
-    Matrix4fD               m_to_world = identity<Matrix4fD>();
+    // Matrix4fD               m_to_world = identity<Matrix4fD>();
+    Matrix4fD               m_to_world_raw   = identity<Matrix4fD>(),
+                            m_to_world_left  = identity<Matrix4fD>(),
+                            m_to_world_right = identity<Matrix4fD>();
 
     const Scene             *m_scene = nullptr;
 

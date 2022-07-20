@@ -1,11 +1,49 @@
 #pragma once
 
+
 #include <psdr/psdr.h>
 #include <psdr/core/records.h>
 #include <psdr/edge/edge.h>
+#include <map>
 
 namespace psdr
 {
+
+struct Edge_Graph {
+    std::map<int, std::vector<int>>           vertices;
+    std::map<std::pair<int,int>, std::pair<bool, int>>        edge_map;
+
+    std::vector<int> edge_id;
+
+    Vector2iD                                 sorted_indices;
+    IntD                                      sorted_edge_id;
+
+    std::array<std::vector<float>, 3> m_vertex_positions;
+    std::array<std::vector<int  >, 2> m_edge_indices;
+
+    std::map<std::pair<int,int>, int>         m_edge_indices_map;
+
+    std::vector<std::pair<int,int>>           draw;
+    std::vector<int>                          jump;
+
+    bool                                      m_ready = false;
+
+    std::vector<double>                        cos_data;
+    std::vector<double>                        length_data;
+
+    float                                     cut_thold = 1.0f;
+    float                                     global_cut_thold = 1.0f;
+
+    EdgeSortOption      m_edge_sort;
+
+
+    Edge_Graph() {};
+    void config(const Vector3fD& vertex_positions, const Vector2iD& valid_edge_indices, int vertex_size, const EdgeSortOption &sort_option);
+    void Greedy(int edge_key, int prev);
+    void print();
+
+};
+
 
 PSDR_CLASS_DECL_BEGIN(Mesh, final, Object)
 public:
@@ -44,16 +82,34 @@ public:
     FloatC sample_position_pdf(const IntersectionC &its, MaskC active = true) const;
     FloatD sample_position_pdf(const IntersectionD &its, MaskD active = true) const;
 
+    MaskC get_obj_mask(std::string obj_name) const{
+        if (m_id == obj_name) {
+            return MaskC(1);
+        } else {
+            return MaskC(0);
+        }
+    };
+
+    IntC get_obj_id() const{
+        return IntC(m_mesh_id);
+    };
+
     void dump(const char *fname) const;
 
     std::string to_string() const override;
+
+    int                 m_mesh_id = -1;
 
     bool                m_ready = false;
 
     bool                m_use_face_normals = false,
                         m_has_uv = false;
 
-    bool                m_enable_edges = true; // Indicates if the mesh creates primiary and secondary edges
+    bool                m_enable_edges = true; 
+
+    EdgeSortOption      m_edge_sort;
+
+    // Indicates if the mesh creates primiary and secondary edges
 
     Matrix4fD           m_to_world_raw   = identity<Matrix4fD>(),
                         m_to_world_left  = identity<Matrix4fD>(),
@@ -64,6 +120,10 @@ public:
 
     int                 m_num_vertices = 0,
                         m_num_faces = 0;
+
+    IntC                m_cut_position;
+
+    Vector2iD           m_valid_edge_indices;
 
     Vector3fD           m_vertex_positions_raw,
                         m_vertex_normals_raw;
@@ -103,6 +163,8 @@ public:
     FloatC              m_vertex_buffer;
     IntC                m_face_buffer;
 
+    Edge_Graph          edge_graph;
+
     ENOKI_PINNED_OPERATOR_NEW(FloatD)
 
 protected:
@@ -115,6 +177,8 @@ PSDR_CLASS_DECL_END(Mesh)
 ENOKI_CALL_SUPPORT_BEGIN(psdr::Mesh)
     ENOKI_CALL_SUPPORT_GETTER(bsdf, m_bsdf)
     ENOKI_CALL_SUPPORT_GETTER(emitter, m_emitter)
+    ENOKI_CALL_SUPPORT_METHOD(get_obj_mask)
+    ENOKI_CALL_SUPPORT_METHOD(get_obj_id)
     ENOKI_CALL_SUPPORT_METHOD(sample_position)
     ENOKI_CALL_SUPPORT_METHOD(sample_position_pdf)
 ENOKI_CALL_SUPPORT_END(psdr::Mesh)

@@ -70,3 +70,4 @@ using SecondaryEdgeInfo = SecondaryEdgeInfo_<FloatD>;
 
 ENOKI_STRUCT_SUPPORT(psdr::PrimaryEdgeInfo_, p0, p1, edge_normal, edge_length)
 ENOKI_STRUCT_SUPPORT(psdr::SecondaryEdgeInfo_, p0, e1, n0, n1, p2, is_boundary)
+

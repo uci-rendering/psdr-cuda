@@ -52,7 +52,6 @@ void Scene::load_string(const char *scene_xml, bool auto_configure) {
     if ( auto_configure ) configure();
 }
 
-
 void Scene::configure() {
     PSDR_ASSERT_MSG(m_loaded, "Scene not loaded yet!");
     PSDR_ASSERT(m_num_sensors == static_cast<int>(m_sensors.size()));
@@ -65,35 +64,44 @@ void Scene::configure() {
     if ( m_opts.spp  > 0 ) {
         int64_t sample_count = static_cast<int64_t>(m_opts.height)*m_opts.width*m_opts.spp;
         if ( m_samplers[0].m_sample_count != sample_count )
-            m_samplers[0].seed(arange<UInt64C>(sample_count));
+            m_samplers[0].seed(arange<UInt64C>(sample_count)+seed);
     }
     if ( m_opts.sppe > 0 ) {
         int64_t sample_count = static_cast<int64_t>(m_opts.height)*m_opts.width*m_opts.sppe;
         if ( m_samplers[1].m_sample_count != sample_count )
-            m_samplers[1].seed(arange<UInt64C>(sample_count));
+            m_samplers[1].seed(arange<UInt64C>(sample_count)+seed);
     }
     if ( m_opts.sppse > 0 ) {
         int64_t sample_count = static_cast<int64_t>(m_opts.height)*m_opts.width*m_opts.sppse;
         if ( m_samplers[2].m_sample_count != sample_count )
-            m_samplers[2].seed(arange<UInt64C>(sample_count));
+            m_samplers[2].seed(arange<UInt64C>(sample_count)+seed);
     }
 
     // Preprocess meshes
     PSDR_ASSERT_MSG(!m_meshes.empty(), "Missing meshes!");
-    std::vector<int> face_offset, edge_offset;
+    std::vector<int> face_offset, edge_offset, cut_offset;
     face_offset.reserve(m_num_meshes + 1);
     face_offset.push_back(0);
     edge_offset.reserve(m_num_meshes + 1);
     edge_offset.push_back(0);
+
+    cut_offset.reserve(m_num_meshes + 1);
+    cut_offset.push_back(0);
+
     m_lower = full<Vector3fC>(std::numeric_limits<float>::max());
     m_upper = full<Vector3fC>(std::numeric_limits<float>::min());
     for ( Mesh *mesh : m_meshes ) {
+        mesh->m_edge_sort = m_edge_sort;
         mesh->configure();
         face_offset.push_back(face_offset.back() + mesh->m_num_faces);
-        if ( m_opts.sppse > 0 && mesh->m_enable_edges )
+        if ( m_opts.sppse > 0 && mesh->m_enable_edges ) {
             edge_offset.push_back(edge_offset.back() + static_cast<int>(slices(*(mesh->m_sec_edge_info))));
-        else
-            edge_offset.push_back(edge_offset.back());
+            cut_offset.push_back(cut_offset.back() + static_cast<int>(slices(mesh->m_cut_position)));
+        }
+        else {
+                edge_offset.push_back(edge_offset.back());
+                cut_offset.push_back(cut_offset.back());
+             }
         for ( int i = 0; i < 3; ++i ) {
             m_lower[i] = enoki::min(m_lower[i], hmin(detach(mesh->m_vertex_positions[i])));
             m_upper[i] = enoki::max(m_upper[i], hmax(detach(mesh->m_vertex_positions[i])));
@@ -217,6 +225,7 @@ void Scene::configure() {
 
     // Generate global sec. edge arrays
     if ( m_opts.sppse > 0 ) {
+        m_edge_cut      = empty<IntC>(cut_offset.back());
         m_sec_edge_info = empty<SecondaryEdgeInfo>(edge_offset.back());
         for ( int i = 0; i < m_num_meshes; ++i ) {
             const Mesh &mesh = *m_meshes[i];
@@ -225,6 +234,10 @@ void Scene::configure() {
                 const int m = static_cast<int>(slices(*mesh.m_sec_edge_info));
                 const IntD idx = arange<IntD>(m) + edge_offset[i];
                 scatter(m_sec_edge_info, *mesh.m_sec_edge_info, idx);
+
+                const int n = static_cast<int>(slices(mesh.m_cut_position));
+                const IntC idc = arange<IntC>(n) + cut_offset[i];
+                scatter(m_edge_cut, mesh.m_cut_position + edge_offset[i], idc);
             }
         }
 #if 0
@@ -323,11 +336,21 @@ Intersection<ad> Scene::ray_intersect(const Ray<ad> &ray, Mask<ad> active, Trian
 
     const Vector3f<ad> &vertex0 = tri_info.p0, &edge1 = tri_info.e1, &edge2 = tri_info.e2;
 
+    // calculate dudp
+    Vector3f<ad> dp0 = edge1,
+                 dp1 = edge2;
+    Vector2f<ad> uv0 = tri_uv_info[0],
+                 uv1 = tri_uv_info[1],
+                 uv2 = tri_uv_info[2];
+    Vector2f<ad> duv0 = uv1 - uv0,
+                 duv1 = uv2 - uv0;
+    Float<ad> det     = fmsub(duv0.x(), duv1.y(), duv0.y() * duv1.x()),
+              inv_det = rcp(det);
+    Mask<ad>  valid_dp = neq(det, 0.f);
+
     if constexpr ( !ad || path_space ) {
         // Path-space formulation
         const Vector2fC &uv = m_optix->m_its.uv;
-
-        //Vector3f<ad> sh_n = normalize(fmadd(tri_info.n0, 1.f - u - v, fmadd(tri_info.n1, u, tri_info.n2*v)));
         Vector3f<ad> sh_n = normalize(bilinear<ad>(tri_info.n0,
                                                    tri_info.n1 - tri_info.n0,
                                                    tri_info.n2 - tri_info.n0,
@@ -344,51 +367,56 @@ Intersection<ad> Scene::ray_intersect(const Ray<ad> &ray, Mask<ad> active, Trian
         Vector3f<ad> dir = its.p - ray.o;
         its.t = norm(dir);
         dir /= its.t;
-
-        its.sh_frame = Frame<ad>(sh_n);
-        its.wi = its.sh_frame.to_local(-dir);
-        //its.uv = fmadd(tri_uv_info[0], 1.f - u - v, fmadd(tri_uv_info[1], u, tri_uv_info[2]*v));
         its.uv = bilinear2<ad>(tri_uv_info[0],
                                tri_uv_info[1] - tri_uv_info[0],
                                tri_uv_info[2] - tri_uv_info[0],
                                uv);
+
+        its.dp_du = zero<Vector3f<ad>>(slices(sh_n));
+        its.dp_dv = zero<Vector3f<ad>>(slices(sh_n));
+        its.dp_du[valid_dp] = fmsub( duv1.y(), dp0, duv0.y() * dp1) * inv_det;
+        its.dp_dv[valid_dp] = fnmadd(duv1.x(), dp0, duv0.x() * dp1) * inv_det;
+        its.sh_frame = Frame<ad>(sh_n);
+        its.sh_frame.s[valid_dp] = normalize(fnmadd(its.sh_frame.n, dot(its.sh_frame.n, its.dp_du), its.dp_du));
+        its.sh_frame.t[valid_dp] = cross(its.sh_frame.n, its.sh_frame.s);
+        its.wi = its.sh_frame.to_local(-dir);
+
+
     } else {
         // Standard (solid-angle) formulation
         auto [uv, t] = ray_intersect_triangle<true>(vertex0, edge1, edge2, ray);
-
-        //Vector3f<ad> sh_n = normalize(fmadd(tri_info.n0, 1.f - u_d - v_d, fmadd(tri_info.n1, u_d, tri_info.n2*v_d)));
         Vector3fD sh_n = normalize(bilinear<true>(tri_info.n0,
                                                   tri_info.n1 - tri_info.n0,
                                                   tri_info.n2 - tri_info.n0,
                                                   uv));
+
         masked(sh_n, face_normal_mask) = its.n;
 
         its.shape = gather<MeshArrayD>(m_meshes_cuda, idx[0], active);
         its.p = ray(t);
         its.t = t;
-
-        its.sh_frame = Frame<ad>(sh_n);
-        its.wi = its.sh_frame.to_local(-ray.d);
-        //its.uv = fmadd(tri_uv_info[0], 1.f - u_d - v_d, fmadd(tri_uv_info[1], u_d, tri_uv_info[2]*v_d));
         its.uv = bilinear2<true>(tri_uv_info[0],
                                  tri_uv_info[1] - tri_uv_info[0],
                                  tri_uv_info[2] - tri_uv_info[0],
                                  uv);
+        // calculate dudp
+        its.dp_du = zero<Vector3f<ad>>(slices(sh_n));
+        its.dp_dv = zero<Vector3f<ad>>(slices(sh_n));
+        its.dp_du[valid_dp] = fmsub( duv1.y(), dp0, duv0.y() * dp1) * inv_det;
+        its.dp_dv[valid_dp] = fnmadd(duv1.x(), dp0, duv0.x() * dp1) * inv_det;
+        its.sh_frame = Frame<ad>(sh_n);
+        its.sh_frame.s[valid_dp] = normalize(fnmadd(its.sh_frame.n, dot(its.sh_frame.n, its.dp_du), its.dp_du));
+        its.sh_frame.t[valid_dp] = cross(its.sh_frame.n, its.sh_frame.s);
+        its.wi = its.sh_frame.to_local(-ray.d);
 
-        // int num_samples = static_cast<int>(slices(ray.o));
-        // FloatC tmp = zero<FloatC>(num_samples);
-        // masked(tmp, detach(active)) = norm(Vector2fC(detach(u_d), detach(v_d)) - m_optix->m_its.uv);
-        // std::cout << hmax(tmp) << std::endl;
     }
     return its;
 }
-
 
 template <bool ad>
 Spectrum<ad> Scene::Lenv(const Vector3f<ad> &wi, Mask<ad> active) const {
     return m_emitter_env == nullptr ? 0.f : m_emitter_env->eval_direction<ad>(wi, active);
 }
-
 
 template <typename T>
 static void print_to_string(const std::vector<T*>& arr, const char* name, std::stringstream& oss) {
@@ -422,6 +450,14 @@ std::string Scene::to_string() const {
     return oss.str();
 }
 
+FloatC Scene::is_valid_emitter_sampling(const Vector3fC &p0, const Vector3fC &dir) const {
+    return 1.0f;
+}
+
+FloatC Scene::is_valid_direction_sampling(const Vector3fC &p0, const Vector3fC &dir) const {
+    return 1.0f;
+}
+
 
 template <bool ad>
 PositionSample<ad> Scene::sample_emitter_position(const Vector3f<ad> &ref_p, const Vector2f<ad> &_sample2, Mask<ad> active) const {
@@ -452,12 +488,74 @@ Float<ad> Scene::emitter_position_pdf(const Vector3f<ad> &ref_p, const Intersect
     return its.shape->emitter(active)->sample_position_pdf(ref_p, its, active);
 }
 
+BoundarySegSampleDirect Scene::sample_edge_ray(const Vector3fC &sample3, MaskC active) const {
+    BoundarySegSampleDirect result;
+    FloatC sample1 = sample3.x();
+    auto [edge_idx, pdf0] = m_sec_edge_distrb->sample_reuse<false>(sample1);
+
+    SecondaryEdgeInfo info = gather<SecondaryEdgeInfo>(m_sec_edge_info, IntD(edge_idx), active);
+    result.p0 = fmadd(info.e1, sample1, info.p0);
+    result.edge = normalize(detach(info.e1));
+    result.edge2 = detach(info.p2) - detach(info.p0);
+    const Vector3fC &p0 = detach(result.p0);
+    pdf0 /= norm(detach(info.e1));
+
+    const Vector3fC &n0 = detach(info.n0);
+    const Vector3fC &n1 = detach(info.n1);
+
+    const Vector3fC &e0 = detach(info.p0);
+    const Vector3fC &e1 = detach(info.e1);
+
+    // squareToUniformSphere
+    FloatC pdf1;
+    Vector3fC e = squareToEdgeRayDirection_NB(tail<2>(sample3), n0, n1, pdf1);
+    Vector3fC eb = squareToEdgeRayDirection_B(tail<2>(sample3), n0, e0, e1);
+    masked(e, detach(info.is_boundary)) = eb;
+    masked(pdf1, detach(info.is_boundary)) = FloatC(1.0f/(4.0f*M_PI));
+
+    pdf0 *= pdf1;
+
+    IntC sgn0 = sign<false>(dot(detach(info.n0), e), EdgeEpsilon),
+         sgn1 = sign<false>(dot(detach(info.n1), e), EdgeEpsilon);
+    result.is_valid = active && (
+        (detach(info.is_boundary) && neq(sgn0, 0)) || (~detach(info.is_boundary) && (sgn0*sgn1 < 0))
+    );
+
+    result.p2 = e;
+    result.pdf = pdf0 & result.is_valid;
+    return result;
+}
+
+BoundarySegSampleDirect Scene::sample_emitter_ray(const Vector3fC &sample3, MaskC active) const {
+    BoundarySegSampleDirect result;
+    FloatC sample1 = sample3.x();
+    auto [edge_idx, pdf0] = m_sec_edge_distrb->sample_reuse<false>(sample1);
+
+    SecondaryEdgeInfo info = gather<SecondaryEdgeInfo>(m_sec_edge_info, IntD(edge_idx), active);
+    result.p0 = fmadd(info.e1, sample1, info.p0);
+    result.edge = normalize(detach(info.e1));
+    result.edge2 = detach(info.p2) - detach(info.p0);
+    const Vector3fC &p0 = detach(result.p0);
+    pdf0 /= norm(detach(info.e1));
+
+    FloatC pdf1;
+    std::tie(result.p2, pdf1) = m_emitter_env->sample_direction(tail<2>(sample3));
+
+    pdf0 *= pdf1;
+
+    IntC sgn0 = sign<false>(dot(detach(info.n0), result.p2), EdgeEpsilon),
+         sgn1 = sign<false>(dot(detach(info.n1), result.p2), EdgeEpsilon);
+    result.is_valid = active && (
+        (detach(info.is_boundary) && neq(sgn0, 0)) || (~detach(info.is_boundary) && (sgn0*sgn1 < 0))
+    );
+
+    result.pdf = pdf0 & result.is_valid;
+    return result;
+}
 
 BoundarySegSampleDirect Scene::sample_boundary_segment_direct(const Vector3fC &sample3, MaskC active) const {
     BoundarySegSampleDirect result;
-
     // Sample a point p0 on a face edge
-
     FloatC sample1 = sample3.x();
     auto [edge_idx, pdf0] = m_sec_edge_distrb->sample_reuse<false>(sample1);
 
@@ -469,17 +567,14 @@ BoundarySegSampleDirect Scene::sample_boundary_segment_direct(const Vector3fC &s
     pdf0 /= norm(detach(info.e1));
 
     // Sample a point ps2 on a emitter
-
     PositionSampleC ps2 = sample_emitter_position<false>(p0, tail<2>(sample3), active);
     result.p2 = ps2.p;
-    result.n = ps2.n;
 
     // Construct the edge "ray" and check if it is valid
-
     Vector3fC e = result.p2 - p0;
     const FloatC distSqr = squared_norm(e);
     e /= safe_sqrt(distSqr);
-    const FloatC cosTheta = dot(result.n, -e);
+    const FloatC cosTheta = dot(ps2.n, -e);
 
     IntC sgn0 = sign<false>(dot(detach(info.n0), e), EdgeEpsilon),
          sgn1 = sign<false>(dot(detach(info.n1), e), EdgeEpsilon);

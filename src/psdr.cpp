@@ -3,6 +3,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/complex.h>
+#include <pybind11/functional.h>
 // #include <pybind11/stl_bind.h>
 #include <enoki/python.h>
 
@@ -13,11 +14,14 @@
 #include <psdr/core/sampler.h>
 #include <psdr/core/pmf.h>
 #include <psdr/core/cube_distrb.h>
+#include <psdr/core/AQ_distrb.h>
 #include <psdr/core/records.h>
 
 #include <psdr/bsdf/diffuse.h>
 #include <psdr/bsdf/ggx.h>
 #include <psdr/bsdf/roughconductor.h>
+
+#include <psdr/bsdf/normalmap.h>
 
 #include <psdr/emitter/area.h>
 #include <psdr/emitter/envmap.h>
@@ -33,17 +37,26 @@
 #include <psdr/integrator/field.h>
 #include <psdr/integrator/direct.h>
 
+// psdr_cuda kernal
+#include <cuda/host/util.cuh>
+
 namespace py = pybind11;
 using namespace py::literals;
 using namespace psdr;
 
+void cuda_test(int num_cat) {
+    std::cout << "Test psdr_cuda kernal call" << std::endl;
+    psdr_cuda::meow(num_cat);
+}
 
 PYBIND11_MODULE(psdr_cuda, m) {
     py::module::import("enoki");
     py::module::import("enoki.cuda");
     py::module::import("enoki.cuda_autodiff");
 
-    m.doc() = "Path-space differentiable renderer";
+    m.doc() = "Path-space differentiable renderer \nKai Yan (kyan8@uci.edu)";
+
+    m.def("cuda_test", &cuda_test);  // Kernal call DEBUG
 
     py::class_<Object>(m, "Object")
         .def("type_name", &Object::type_name)
@@ -71,16 +84,26 @@ PYBIND11_MODULE(psdr_cuda, m) {
             }
         );
 
+    py::class_<EdgeSortOption>(m, "EdgeSortOption")
+        .def(py::init<>())
+        .def_readwrite("enable_sort", &EdgeSortOption::enable_sort)
+        .def_readwrite("local_angle", &EdgeSortOption::local_angle)
+        .def_readwrite("global_angle", &EdgeSortOption::global_angle)
+        .def_readwrite("min_global_step", &EdgeSortOption::min_global_step)
+        .def_readwrite("max_depth", &EdgeSortOption::max_depth);
+
     // Core classes
 
     py::class_<RayC>(m, "RayC")
         .def(py::init<>())
+        .def(py::init<const Vector3fC &, const Vector3fC &>())
         .def("reversed", &RayC::reversed)
         .def_readwrite("o", &RayC::o)
         .def_readwrite("d", &RayC::d);
 
     py::class_<RayD>(m, "RayD")
         .def(py::init<>())
+        .def(py::init<const Vector3fD &, const Vector3fD &>())
         .def("reversed", &RayD::reversed)
         .def_readwrite("o", &RayD::o)
         .def_readwrite("d", &RayD::d);
@@ -119,7 +142,7 @@ PYBIND11_MODULE(psdr_cuda, m) {
         .def_readwrite("resolution", &Bitmap3fD::m_resolution)
         .def_readwrite("data", &Bitmap3fD::m_data);
 
-    /*
+    
     py::class_<InteractionC>(m, "InteractionC")
         .def("is_valid", &InteractionC::is_valid)
         .def_readonly("wi", &InteractionC::wi)
@@ -148,11 +171,9 @@ PYBIND11_MODULE(psdr_cuda, m) {
 
     py::class_<Sampler>(m, "Sampler")
         .def(py::init<>())
-        .def("clone", &Sampler::clone)
         .def("seed", &Sampler::seed)
         .def("next_1d", &Sampler::next_1d<false>)
         .def("next_2d", &Sampler::next_2d<false>);
-    */
 
     py::class_<DiscreteDistribution>(m, "DiscreteDistribution")
         .def(py::init<>())
@@ -200,6 +221,10 @@ PYBIND11_MODULE(psdr_cuda, m) {
     py::class_<BSDF, Object>(m, "BSDF")
         .def("anisotropic", &BSDF::anisotropic);
 
+    py::class_<NormalMap, BSDF>(m, "NormalMapBSDF")
+        .def_readwrite("nested_bsdf", &NormalMap::m_bsdf)
+        .def_readwrite("normal_map", &NormalMap::m_nmap);
+
     py::class_<Diffuse, BSDF>(m, "DiffuseBSDF")
         //.def(py::init<>())
         //.def(py::init<const ScalarVector3f&>())
@@ -214,14 +239,20 @@ PYBIND11_MODULE(psdr_cuda, m) {
         .def_readwrite("k", &RoughConductor::m_k)
         .def_readwrite("specular_reflectance", &RoughConductor::m_specular_reflectance);
 
-    // Sensors
-
     py::class_<Sensor, Object>(m, "Sensor")
-        .def_readwrite("to_world", &Sensor::m_to_world);
+        .def("set_transform", &Sensor::set_transform, "mat"_a, "set_left"_a = true)
+        .def("append_transform", &Sensor::append_transform, "mat"_a, "append_left"_a = true)
+        .def_readwrite("to_world", &Sensor::m_to_world_raw)
+        .def_readwrite("to_world_left", &Sensor::m_to_world_left)
+        .def_readwrite("to_world_right", &Sensor::m_to_world_right);
 
     py::class_<PerspectiveCamera, Sensor>(m, "PerspectiveCamera")
         .def(py::init<float, float, float>())
-        .def_readwrite("to_world", &PerspectiveCamera::m_to_world);
+        .def("set_transform", &Sensor::set_transform, "mat"_a, "set_left"_a = true)
+        .def("append_transform", &Sensor::append_transform, "mat"_a, "append_left"_a = true)
+        .def_readwrite("to_world", &PerspectiveCamera::m_to_world_raw)
+        .def_readwrite("to_world_left", &Sensor::m_to_world_left)
+        .def_readwrite("to_world_right", &Sensor::m_to_world_right);
 
     // Emitters
 
@@ -256,23 +287,27 @@ PYBIND11_MODULE(psdr_cuda, m) {
         .def_readwrite("vertex_uv", &Mesh::m_vertex_uv)
         .def_readwrite("face_indices", &Mesh::m_face_indices)
         .def_readwrite("face_uv_indices", &Mesh::m_face_uv_indices)
+        .def_readwrite("valid_edge_indices", &Mesh::m_valid_edge_indices)
 #ifdef PSDR_MESH_ENABLE_1D_VERTEX_OFFSET
         .def_readwrite("vertex_offset", &Mesh::m_vertex_offset)
         .def("shift_vertices", &Mesh::shift_vertices)
 #endif
-        .def_readwrite("enable_edges", &Mesh::m_enable_edges)
+        .def_readwrite("enable_edges", &Mesh::m_enable_edges) // TODO
         .def("edge_indices", [](const Mesh &mesh) { return head<4>(mesh.m_edge_indices); })
         .def("dump", &Mesh::dump);
 
     // Scene
-
     py::class_<Scene, Object>(m, "Scene")
         .def(py::init<>())
         .def("load_file", &Scene::load_file, "file_name"_a, "auto_configure"_a = true)
         .def("load_string", &Scene::load_string, "scene_xml"_a, "auto_configure"_a = true)
         .def("configure", &Scene::configure)
+        .def("ray_intersect", &Scene::ray_intersect<false>)
+        .def("ray_intersectAD", &Scene::ray_intersect<true>)
         .def("sample_boundary_segment_direct", &Scene::sample_boundary_segment_direct, "sample3"_a, "active"_a = true)
         .def_readwrite("opts", &Scene::m_opts, "Render options")
+        .def_readwrite("seed", &Scene::seed, "Sample seed")
+        .def_readwrite("edge_sort_opt", &Scene::m_edge_sort, "Edge Sort options")
         .def_readonly("num_sensors", &Scene::m_num_sensors)
         .def_readonly("num_meshes", &Scene::m_num_meshes)
         .def_readonly("param_map", &Scene::m_param_map, "Parameter map");
@@ -280,16 +315,17 @@ PYBIND11_MODULE(psdr_cuda, m) {
     // Integrator base and basic integrators
 
     py::class_<Integrator, Object>(m, "Integrator")
-        .def("renderC", &Integrator::renderC, "scene"_a, "sensor_id"_a = 0)
-        .def("renderD", &Integrator::renderD, "scene"_a, "sensor_id"_a = 0)
+        .def("renderC", &Integrator::renderC, "scene"_a, "sensor_id"_a = 0, "npass"_a = 1)
+        .def("renderD", &Integrator::renderD, "scene"_a, "sensor_id"_a = 0)        
         .def("preprocess_secondary_edges", &Integrator::preprocess_secondary_edges, "scene"_a, "sensor_id"_a, "resolution"_a, "nrounds"_a = 1);
 
     py::class_<FieldExtractionIntegrator, Integrator>(m, "FieldExtractionIntegrator")
-        .def(py::init<const char*>());
+        .def(py::init<char*>());
 
     // Direct-illumination Integrators
 
     py::class_<DirectIntegrator, Integrator>(m, "DirectIntegrator")
-        .def(py::init<int, int>(), "bsdf_samples"_a = 1, "light_samples"_a = 1)
+        .def(py::init<int, int, int>(), "bsdf_samples"_a = 1, "light_samples"_a = 1, "edge_direct"_a = 1)
         .def_readwrite("hide_emitters", &DirectIntegrator::m_hide_emitters);
+
 }

@@ -1,11 +1,14 @@
 # psdr-cuda
-Path-space differentiable renderer
+Efficient Estimation of Boundary Integrals for Path-Space Differentiable Rendering
 
-Official documentation: https://psdr-cuda.readthedocs.io/en/latest/
+Paper Link: https://shuangz.com/projects/psdr-aq-sg22/
 
+PSDR_CUDA Official documentation: https://psdr-cuda.readthedocs.io/en/latest/
 
-# Updates:
+Please follows the official documentation for building.
 
-5/15/2022: psdr-cuda no longer requires OpenEXR, which is hard to build/link by many users. We are using TinyEXR
+# Example:
 
-5/15/2022: New precompiled binaries of most of the dependencies https://www.dropbox.com/s/tllc5y1mobfoegz/ext_win64.zip?dl=0
+To run an example
+'''cd examples && python psdr_test.py --test example''' 
+You can edit the '''config.py''' for more tests.

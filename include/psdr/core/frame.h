@@ -39,6 +39,11 @@ struct Frame_
 
     inline Frame_(const Vector3f<ad> &s, const Vector3f<ad> &t, const Vector3f<ad> &n) : s(s), t(t), n(n) {}
 
+    inline Frame_(const Vector3f<ad> &n_, const Vector3f<ad> &s_) : n(n_), s(s_) {
+        t = normalize(cross(n, s));
+        s = normalize(cross(t, n));
+    }
+
     inline Frame_(const Frame_ &frame) : s(frame.s), t(frame.t), n(frame.n) {}
 
     /// Convert from world coordinates to local coordinates

@@ -9,6 +9,8 @@ constexpr float Epsilon         = 1e-5f;
 constexpr float RayEpsilon      = 1e-3f;
 constexpr float ShadowEpsilon   = 1e-3f;
 constexpr float EdgeEpsilon     = 1e-5f;
+constexpr float AQEpsilon       = 1e-5f;
+constexpr float DeepEpsilon     = 1e-8f;
 
 constexpr float E               = 2.71828182845904523536f;
 constexpr float Pi              = 3.14159265358979323846f;

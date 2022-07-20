@@ -6,12 +6,10 @@
 namespace psdr
 {
 
-PSDR_CLASS_DECL_BEGIN(Diffuse, final, BSDF)
+PSDR_CLASS_DECL_BEGIN(NormalMap, final, BSDF)
 public:
-    Diffuse() : m_reflectance(0.5f) {}
-    Diffuse(const ScalarVector3f &ref) : m_reflectance(ref) {}
-    Diffuse(const char *refl_file);
-    Diffuse(const Bitmap3fD &reflectance);
+    NormalMap() {}
+    NormalMap(const Bitmap3fD &n_map);
 
     SpectrumC eval(const IntersectionC &its, const Vector3fC &wo, MaskC active = true) const override;
     SpectrumD eval(const IntersectionD &its, const Vector3fD &wo, MaskD active = true) const override;
@@ -27,9 +25,10 @@ public:
 
     bool anisotropic() const override { return false; }
 
-    std::string to_string() const override { return std::string("Diffuse[id=") + m_id + "]"; }
+    std::string to_string() const override { return std::string("NormalMap[id=") + m_id + "]"; }
 
-    Bitmap3fD m_reflectance;
+    Bitmap3fD m_nmap;
+    BSDF*     m_bsdf;
 
 protected:
     template <bool ad>
@@ -40,6 +39,6 @@ protected:
 
     template <bool ad>
     Float<ad> __pdf(const Intersection<ad> &, const Vector3f<ad> &, Mask<ad>) const;
-PSDR_CLASS_DECL_END(Diffuse)
+PSDR_CLASS_DECL_END(NormalMap)
 
 } // namespace psdr

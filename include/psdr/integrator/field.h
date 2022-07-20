@@ -7,9 +7,10 @@ namespace psdr
 
 PSDR_CLASS_DECL_BEGIN(FieldExtractionIntegrator, final, Integrator)
 public:
-    FieldExtractionIntegrator(const char *field);
+    FieldExtractionIntegrator(char *field);
 
     std::string m_field;
+    std::string m_object;
 
 protected:
     SpectrumC Li(const Scene &scene, Sampler &sampler, const RayC &ray, MaskC active = true) const override;

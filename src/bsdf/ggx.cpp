@@ -34,7 +34,7 @@ Float<ad> GGXDistribution::eval(const Vector3f<ad>& m) const {
 
 
 template <bool ad>
-Vector3f<ad> GGXDistribution::sample(const Vector3f<ad>& wi, const Vector3f<ad>& sample) const {
+std::pair<Vector3f<ad>, Float<ad>> GGXDistribution::sample(const Vector3f<ad>& wi, const Vector3f<ad>& sample) const {
     Float<ad> sin_phi, cos_phi, cos_theta;
     Vector3f<ad> wi_p;
 
@@ -71,7 +71,12 @@ Vector3f<ad> GGXDistribution::sample(const Vector3f<ad>& wi, const Vector3f<ad>&
             fmadd(sin_phi, slope.x(), cos_phi * slope.y()) * detach(m_alpha_v)
         );
     }
-    return normalize(Vector3f<ad>(-slope.x(), -slope.y(), 1));;
+    Vector3f<ad> m = normalize(Vector3f<ad>(-slope.x(), -slope.y(), 1));
+
+    // Compute probability density of the sampled position
+    Float<ad> pdf = smith_g1<ad>(wi, m) * abs(dot(wi, m)) * eval<ad>(m) / abs(Frame<ad>::cos_theta(wi));
+    pdf = detach(pdf);
+    return {m, pdf};
 }
 
 
@@ -110,8 +115,8 @@ template FloatC GGXDistribution::eval<false>(const Vector3fC& m) const;
 template FloatD GGXDistribution::eval<true >(const Vector3fD& m) const;
 template FloatC GGXDistribution::G<false>(const Vector3fC& wi, const Vector3fC& wo, const Vector3fC& m) const;
 template FloatD GGXDistribution::G<true >(const Vector3fD& wi, const Vector3fD& wo, const Vector3fD& m) const;
-template Vector3fC GGXDistribution::sample<false>(const Vector3fC& wi, const Vector3fC& sample) const;
-template Vector3fD GGXDistribution::sample<true >(const Vector3fD& wi, const Vector3fD& sample) const;
+template std::pair<Vector3fC, FloatC> GGXDistribution::sample<false>(const Vector3fC& wi, const Vector3fC& sample) const;
+template std::pair<Vector3fD, FloatD> GGXDistribution::sample<true >(const Vector3fD& wi, const Vector3fD& sample) const;
 template FloatC GGXDistribution::smith_g1<false>(const Vector3fC& v, const Vector3fC& m) const;
 template FloatD GGXDistribution::smith_g1<true >(const Vector3fD& v, const Vector3fD& m) const;
 

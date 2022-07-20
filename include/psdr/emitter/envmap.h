@@ -43,11 +43,12 @@ public:
                             m_to_world, m_from_world;
 
     Vector3fC               m_lower, m_upper;
-    HyperCubeDistribution2f m_cell_distrb;
+    // HyperCubeDistribution2f m_cell_distrb;
+
+    CubeDistribution        m_cube_distrb;
 
     ENOKI_PINNED_OPERATOR_NEW(FloatD)
 
-protected:
     template <bool ad>
     PositionSample<ad> __sample_position(const Vector3f<ad> &ref_p, const Vector2f<ad>&, Mask<ad>) const;
 
@@ -55,6 +56,6 @@ protected:
 
     template <bool ad>
     Float<ad> __sample_position_pdf(const Vector3f<ad> &, const Intersection<ad> &, Mask<ad>) const;
-PSDR_CLASS_DECL_END(AreaLight)
+PSDR_CLASS_DECL_END(EnvironmentMap)
 
 } // namespace psdr

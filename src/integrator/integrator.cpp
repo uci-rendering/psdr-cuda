@@ -10,12 +10,20 @@
 namespace psdr
 {
 
-SpectrumC Integrator::renderC(const Scene &scene, int sensor_id) const {
+SpectrumC Integrator::renderC(const Scene &scene, int sensor_id, int npass) const {
     using namespace std::chrono;
     auto start_time = high_resolution_clock::now();
 
-    SpectrumC result = __render<false>(scene, sensor_id);
-
+    const RenderOption &opts = scene.m_opts;
+    const int num_pixels = opts.width*opts.height;
+    IntC idx = arange<IntC>(num_pixels);
+    SpectrumC result = zero<SpectrumC>(num_pixels);
+    for (int i=0; i<npass; ++i) {
+        SpectrumC value = __render<false>(scene, sensor_id) / static_cast<float>(npass);
+        masked(value, ~enoki::isfinite<SpectrumC>(value)) = 0.f;
+        scatter_add(result, value, idx);
+    }
+    
     cuda_eval(); cuda_sync();
 
     auto end_time = high_resolution_clock::now();
@@ -34,11 +42,9 @@ SpectrumD Integrator::renderD(const Scene &scene, int sensor_id) const {
     auto start_time = high_resolution_clock::now();
 
     // Interior integral
-
     SpectrumD result = __render<true>(scene, sensor_id);
-
+    
     // Boundary integral
-
     if ( likely(scene.m_opts.sppe > 0) ) {
         render_primary_edges(scene, sensor_id, result);
     }
@@ -58,7 +64,6 @@ SpectrumD Integrator::renderD(const Scene &scene, int sensor_id) const {
 
     return result;
 }
-
 
 template <bool ad>
 Spectrum<ad> Integrator::__render(const Scene &scene, int sensor_id) const {

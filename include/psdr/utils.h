@@ -163,4 +163,109 @@ Spectrum<ad> fresnel(const Spectrum<ad> &eta_r, const Spectrum<ad> &eta_i, const
     return .5f * (r_s + r_p);
 }
 
+template <bool ad>
+std::tuple<Float<ad>, Float<ad>, Float<ad>, Float<ad>> fresnel_dielectric(const Float<ad> &eta, const Float<ad> &cos_theta_i) {
+    auto outside_mask = cos_theta_i >= 0.f;
+    Float<ad> rcp_eta = rcp(eta),
+                 eta_it = select(outside_mask, eta, rcp_eta),
+                 eta_ti = select(outside_mask, rcp_eta, eta);
+
+    Float<ad> cos_theta_t_sqr =
+        fnmadd(fnmadd(cos_theta_i, cos_theta_i, 1.f), eta_ti * eta_ti, 1.f);
+
+    Float<ad> cos_theta_i_abs = abs(cos_theta_i);
+    Float<ad> cos_theta_t_abs = safe_sqrt(cos_theta_t_sqr);
+
+    auto index_matched = eq(eta, 1.f),
+         special_case  = index_matched || eq(cos_theta_i_abs, 0.f);
+
+    Float<ad> r_sc = select(index_matched, Float<ad>(0.f), Float<ad>(1.f));
+
+    Float<ad> a_s = fnmadd(eta_it, cos_theta_t_abs, cos_theta_i_abs) /
+                       fmadd(eta_it, cos_theta_t_abs, cos_theta_i_abs);
+
+    Float<ad> a_p = fnmadd(eta_it, cos_theta_i_abs, cos_theta_t_abs) /
+                       fmadd(eta_it, cos_theta_i_abs, cos_theta_t_abs);
+
+    Float<ad> r = .5f * (sqr(a_s) + sqr(a_p));
+
+    masked(r, special_case) = r_sc;
+
+    Float<ad> cos_theta_t = mulsign_neg(cos_theta_t_abs, cos_theta_i);
+    return { r, cos_theta_t, eta_it, eta_ti };
+}
+
+ENOKI_INLINE Vector3fC squareToEdgeRayDirection_NB(const Vector2fC &sample, const Vector3fC &n0, const Vector3fC &n1, FloatC &pdf) {
+    FloatC tmp = dot(n0, n1);
+    FloatC phi0 = acos(tmp);
+    pdf = 1.0f/(4.0f*phi0);
+
+    Vector3fC Z = normalize(n0 + n1);
+    Vector3fC Y = normalize(cross(n0, Z));
+    Vector3fC X = cross(Y, Z);
+
+    FloatC phi = (sample[0] - 0.5f)*phi0;
+
+    phi = clamp(phi, -0.5f*phi0 + Epsilon, 0.5f*phi0 - Epsilon);
+
+    Vector3fC X1 = X*cos(phi) + Z*sin(phi);
+
+    FloatC b = select(sample[1] > 0.5f, 4.0f*sample[1] - 3.0f, 4.0f*sample[1] - 1.0f);
+    FloatC a = select(sample[1] > 0.5f, -sqrt(1.0f - b*b), sqrt(1.0f - b*b));
+
+    Vector3fC ret = normalize(X1*a + Y*b);
+
+    return ret;
+}
+
+ENOKI_INLINE std::pair<Vector3fC, Vector3fC> coordinate_system2(const Vector3fC &n) {
+    FloatC sign = enoki::sign(n.z()),
+          a    = -rcp(sign + n.z()),
+          b    = n.x() * n.y() * a;
+
+    return {
+        Vector3fC(mulsign(sqr(n.x()) * a, n.z()) + 1.f,
+                 mulsign(b, n.z()),
+                 mulsign_neg(n.x(), n.z())),
+        Vector3fC(b, sign + sqr(n.y()) * a, -n.y())
+    };
+}
+
+ENOKI_INLINE Vector3fC squareToEdgeRayDirection_B(const Vector2fC &sample, const Vector3fC &n0, const Vector3fC &e0, const Vector3fC &e1) {
+    Vector3fC tmp = cross(n0, e0 - e1);
+    FloatC tmpNorm = norm(tmp);
+
+    Vector3fC s, t, n;
+
+    n = tmp/tmpNorm;
+    std::tie(s, t) = coordinate_system2(n);
+
+    FloatC z = 1.0f - 2.0f*sample.y();
+
+    // Avoid sampling directions that are almost within the plane
+    z = min(z, FloatC(1.0f - EdgeEpsilon));
+
+    FloatC r = sqrt(max(FloatC(0.0f), FloatC(1.0f - z*z)));
+
+    FloatC Phi = FloatC(2.0f*M_PI)*sample[0];
+    FloatC sinPhi = sin(Phi);
+    FloatC cosPhi = cos(Phi);
+    Vector3fC ret = s*r*cosPhi + t*r*sinPhi + n*z;
+
+    return ret;
+}
+
+template <bool ad>
+ENOKI_INLINE Float<ad> mis_weight(const Float<ad> &pdf1, const Float<ad> &pdf2) {
+    Float<ad> w1 = sqr(pdf1), w2 = sqr(pdf2);
+    return w1/(w1 + w2);
+}
+
+template <bool ad>
+ENOKI_INLINE Float<ad> mis_weight2(const Float<ad> &pdf1, const Float<ad> &pdf2) {
+    Float<ad> w1 = pdf1, w2 = pdf2;
+    return w1/(w1 + w2);
+}
+
+
 } // namespace psdr

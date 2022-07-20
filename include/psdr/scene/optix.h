@@ -334,6 +334,7 @@ void build_accel(PathTracerState& state, const std::vector<OptixBuildInput>& tri
 
     // build CUDA stream
     state.params.handle         = state.gas_handle;
+
     if (state.d_gas_output_buffer)
         cuda_free(reinterpret_cast<void*>(state.d_gas_output_buffer));
     state.d_gas_output_buffer = (CUdeviceptr)output_buffer;

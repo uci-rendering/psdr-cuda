@@ -5,10 +5,10 @@
 
     <sensor type="perspective">
         <float name="focus_distance" value="100.012"/>
-        <float name="fov" value="20"/>
+        <float name="fov" value="8"/>
         <string name="fov_axis" value="x"/>
         <float name="near_clip" value="0.01"/>
-        <transform name="to_world">
+        <transform name="toWorld">
             <lookat target="14.0765, -59.0563, 80.8849" origin="14.1213, -59.6987, 81.65" up="-0.00390582, 0.765772, 0.643101"/>
         </transform>
 
@@ -18,40 +18,45 @@
 
         <film type="hdrfilm">
             <boolean name="banner" value="false"/>
-            <integer name="height" value="270"/>
-            <integer name="width" value="480"/>
+            <integer name="height" value="512"/>
+            <integer name="width" value="512"/>
 
             <rfilter type="box"/>
         </film>
     </sensor>
-
+    
     <bsdf type="diffuse" id="floor">
         <rgb name="reflectance" value="0.7, 0.7, 0.7"/>
     </bsdf>
 
-    <bsdf type="diffuse" id="tree">
-        <rgb name="reflectance" value="0.4, 0.4, 0.4"/>
+    <bsdf type="diffuse" id="obj1">
+        <rgb name="reflectance" value="0.8, 0.8, 0.4"/>
     </bsdf>
 
     <emitter type="envmap">
-        <string name="filename" value="./data/envmaps/ballroom_1k.exr"/>
-        <transform name='to_world'>
+        <string name="filename" value="./data/parched_256.exr"/>
+        <transform name='toWorld'>
             <rotate x='1.0' angle='90'/>
         </transform>
     </emitter>
 
     <shape type="obj">
-        <string name="filename" value="./data/objects/bunny/bunny_low.obj"/>
-        <transform name='to_world'>
+        <string name="filename" value="./data/bunny.obj"/>
+        <boolean name="faceNormals" value="false"/>
+        <transform name='toWorld'>
             <rotate x='1.0' angle='90'/>
-            <scale x='.12' y='.12' z='.12'/>
-            <translate z="5.5" y="4"/>
+            <scale x='2.0' y='2.0' z='2.0'/>
+            <translate x="8" z="3.5" y="2.5"/>
         </transform>
-        <ref id="tree"/>
+        <ref id="obj1"/>
     </shape>
 
     <shape type="obj">
-        <string name="filename" value="./data/objects/tree/plane.obj"/>
+        <string name="filename" value="./data/plane.obj"/>
+        <transform name="toWorld">
+            <scale x='10.0' y='1.0' z='10.0'/>
+        </transform>
+
         <ref id="floor"/>
     </shape>
 </scene>

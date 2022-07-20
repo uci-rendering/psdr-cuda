@@ -4,21 +4,36 @@
 #include <psdr/core/transform.h>
 #include <psdr/emitter/envmap.h>
 
+
+// #include <iostream>
+// #include <iomanip>
+// #include <cmath>
+// #include <fstream>
+
+
+
 namespace psdr
 {
 
 void EnvironmentMap::configure() {
     int width = m_radiance.m_resolution.x(), height = m_radiance.m_resolution.y();
+
     PSDR_ASSERT(width > 1 && height > 1);
 
     width = (width - 1) << 1; height = (height - 1) << 1;
-    m_cell_distrb.set_resolution(ScalarVector2i(width, height));
 
-    Vector2fC uv = (m_cell_distrb.m_cells + Vector2fC(.5f, .5f))*m_cell_distrb.m_unit;
-    SpectrumC val = m_radiance.eval<false>(uv, false);
+    // m_cell_distrb.set_resolution(ScalarVector2i(width, height));
 
-    FloatC theta = ((arange<IntC>(width*height) % height) + .5f)*(Pi/static_cast<float>(height));  
-    m_cell_distrb.set_mass(rgb2luminance<false>(val)*sin(theta));
+    m_cube_distrb.set_resolution(ScalarVector2i(width, height));
+
+    // Vector2fC uv = (m_cell_distrb.m_cells + Vector2fC(.5f, .5f))*m_cell_distrb.m_unit;
+    // SpectrumC val = m_radiance.eval<false>(uv, false);
+    // FloatC theta = ((arange<IntC>(width*height) % (height)) + .5f)*(Pi/static_cast<float>(height));  
+    // m_cell_distrb.set_mass(rgb2luminance<false>(val)*sin(theta));
+
+    m_cube_distrb.set_mass(m_radiance);
+
+
 
     m_to_world = m_to_world_left*m_to_world_raw;
     m_from_world = inverse(m_to_world);
@@ -94,11 +109,79 @@ PositionSample<ad> EnvironmentMap::__sample_position(const Vector3f<ad> &ref_p, 
     return result;
 }
 
+template <int his_size>
+struct Histogram_1D
+{
+    std::array<float, his_size> data;
+
+    Histogram_1D() {
+        for (int i=0; i<his_size; ++i) {
+            data[i] = 0.0f;
+        }
+    }
+
+    void update(float value) {
+        Float temp = value*Float(his_size);
+        int idx = int(temp);
+        assert(idx < his_size);
+        data[idx] += 1.0f;
+    }
+
+    void normalize() {
+        Float sum = 0.0f;
+        for (int i=0; i<his_size; ++i) {
+            sum += data[i];
+        }
+        for (int i=0; i<his_size; ++i) {
+            data[i] = data[i] * his_size / sum;
+        }
+    }
+
+    float getValue(int xi) const {
+        assert(xi < his_size);
+        return data[xi];
+    }
+};
+
+// template <int x_size, int y_size>
+// struct Histogram_2D
+// {
+//     std::array<float, x_size*y_size> data;
+
+//     Histogram_2D() {
+//         for (int i=0; i<x_size*y_size; ++i) {
+//             data[i] = 0.0f;
+//         }
+//     }
+
+//     void update(float value1, float value2) {
+//         int idx = int(value1*float(x_size));
+//         int idy = int(value2*float(y_size));
+//         data[idx*x_size+idy] += 1.0f;
+//     }
+
+//     void normalize() {
+//         float sum = 0.0f;
+//         for (int i=0; i<x_size*y_size; ++i) {
+//             sum += data[i];
+//         }
+//         for (int i=0; i<x_size*y_size; ++i) {
+//             data[i] = data[i] * x_size*y_size / sum;
+//         }
+//     }
+
+//     float getValue(int xi, int yi) const {
+//         int idx = xi*x_size+yi;
+//         return data[idx];
+//     }
+// };
+
+
 
 std::pair<Vector3fC, FloatC> EnvironmentMap::sample_direction(Vector2fC &uv) const {
     PSDR_ASSERT(m_ready);
-    FloatC pdf = m_cell_distrb.sample_reuse(uv);
-
+    // FloatC pdf = m_cell_distrb.sample_reuse(uv);
+    FloatC pdf = m_cube_distrb.sample_reuse(uv);
     FloatC theta = uv.y()*Pi, phi = uv.x()*TwoPi;
     Vector3fC d = sphdir<false>(theta, phi);
     d = Vector3fC(d.y(), d.z(), -d.x());
@@ -139,7 +222,8 @@ Float<ad> EnvironmentMap::__sample_position_pdf(const Vector3f<ad> &ref_p, const
     FloatC factor = G*safe_rsqrt(max(sqr(d.x()) + sqr(d.z()), sqr(Epsilon)))*(.5f/sqr(Pi));
     Vector2fC uv(atan2(d.x(), -d.z())*InvTwoPi, safe_acos(d.y())*InvPi);
     uv -= floor(uv);
-    return m_cell_distrb.pdf(uv)*factor;
+    // return m_cell_distrb.pdf(uv)*factor;
+    return m_cube_distrb.pdf(uv)*factor;
 }
 
 

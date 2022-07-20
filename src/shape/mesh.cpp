@@ -12,6 +12,8 @@
 #include <psdr/emitter/emitter.h>
 #include <psdr/shape/mesh.h>
 
+#include <chrono>
+#include <numeric>
 
 namespace psdr
 {
@@ -249,18 +251,60 @@ void Mesh::configure() {
     m_face_distrb->init(detach(face_areas));
 
     if ( m_enable_edges ) {
-        if ( m_sec_edge_info == nullptr ) m_sec_edge_info = new SecondaryEdgeInfo();
+        if (m_edge_sort.enable_sort == false) {
+            m_cut_position = 0;
+            if ( m_sec_edge_info == nullptr ) m_sec_edge_info = new SecondaryEdgeInfo();
+            SecondaryEdgeInfo secEdgeInfo;
+            secEdgeInfo.is_boundary = (m_edge_indices[3] < 0);
+            secEdgeInfo.p0 = gather<Vector3fD>(m_vertex_positions, m_edge_indices[0]);
+            secEdgeInfo.e1 = gather<Vector3fD>(m_vertex_positions, m_edge_indices[1]) - secEdgeInfo.p0;
+            secEdgeInfo.n0 = gather<Vector3fD>(m_triangle_info->face_normal, m_edge_indices[2]);
+            secEdgeInfo.n1 = gather<Vector3fD>(m_triangle_info->face_normal, m_edge_indices[3], ~secEdgeInfo.is_boundary);
+            secEdgeInfo.p2 = gather<Vector3fD>(m_vertex_positions, m_edge_indices[4]);
 
-        SecondaryEdgeInfo secEdgeInfo;
-        secEdgeInfo.is_boundary = (m_edge_indices[3] < 0);
-        secEdgeInfo.p0 = gather<Vector3fD>(m_vertex_positions, m_edge_indices[0]);
-        secEdgeInfo.e1 = gather<Vector3fD>(m_vertex_positions, m_edge_indices[1]) - secEdgeInfo.p0;
-        secEdgeInfo.n0 = gather<Vector3fD>(m_triangle_info->face_normal, m_edge_indices[2]);
-        secEdgeInfo.n1 = gather<Vector3fD>(m_triangle_info->face_normal, m_edge_indices[3], ~secEdgeInfo.is_boundary);
-        secEdgeInfo.p2 = gather<Vector3fD>(m_vertex_positions, m_edge_indices[4]);
+            MaskD keep = (dot(secEdgeInfo.n0, secEdgeInfo.n1) < 1.f - EdgeEpsilon);
+            *m_sec_edge_info = compressD<SecondaryEdgeInfo>(secEdgeInfo, keep);
+        } else {
+            if ( m_sec_edge_info == nullptr ) m_sec_edge_info = new SecondaryEdgeInfo();
 
-        MaskD keep = (dot(secEdgeInfo.n0, secEdgeInfo.n1) < 1.f - EdgeEpsilon);
-        *m_sec_edge_info = compressD<SecondaryEdgeInfo>(secEdgeInfo, keep);
+            Vector3fD n0 = gather<Vector3fD>(m_triangle_info->face_normal, m_edge_indices[2]);
+            Vector3fD n1 = gather<Vector3fD>(m_triangle_info->face_normal, m_edge_indices[3], ~(m_edge_indices[3] < 0));
+
+            MaskD keep = (dot(n0, n1) < 1.f - EdgeEpsilon);
+
+            IntD v0 = compressD<IntD>((m_edge_indices[0]), keep);
+            IntD v1 = compressD<IntD>((m_edge_indices[1]), keep);
+            IntD v2 = compressD<IntD>((m_edge_indices[2]), keep);
+            IntD v3 = compressD<IntD>((m_edge_indices[3]), keep);
+            IntD v4 = compressD<IntD>((m_edge_indices[4]), keep);
+
+            m_valid_edge_indices[0] = v0;
+            m_valid_edge_indices[1] = v1;
+
+            // TODO: should not have this
+            // if (edge_graph.m_ready == false) {
+                edge_graph.config(m_vertex_positions, m_valid_edge_indices, m_num_vertices, m_edge_sort);
+                // edge_graph.m_ready = true;
+            // }
+            m_cut_position = IntC::copy(edge_graph.jump.data(), edge_graph.jump.size());
+
+            IntD nv0 = edge_graph.sorted_indices[0];
+            IntD nv1 = edge_graph.sorted_indices[1];
+            IntD nv2 = zero<IntC>(slices(v2));
+            IntD nv3 = zero<IntC>(slices(v3));
+            IntD nv4 = zero<IntC>(slices(v4));
+
+            scatter(nv2, v2, edge_graph.sorted_edge_id);
+            scatter(nv3, v3, edge_graph.sorted_edge_id);
+            scatter(nv4, v4, edge_graph.sorted_edge_id);
+
+            m_sec_edge_info->is_boundary = (nv3 < 0);
+            m_sec_edge_info->p0 = gather<Vector3fD>(m_vertex_positions, nv0);
+            m_sec_edge_info->e1 = gather<Vector3fD>(m_vertex_positions, nv1) - m_sec_edge_info->p0;
+            m_sec_edge_info->n1 = gather<Vector3fD>(m_triangle_info->face_normal, nv2);
+            m_sec_edge_info->n0 = gather<Vector3fD>(m_triangle_info->face_normal, nv3, ~m_sec_edge_info->is_boundary);
+            m_sec_edge_info->p2 = gather<Vector3fD>(m_vertex_positions, nv4);
+        }
     } else {
         if ( m_sec_edge_info != nullptr ) {
             delete m_sec_edge_info;
@@ -424,6 +468,262 @@ std::string Mesh::to_string() const {
     if ( m_id != "" ) oss << ", id=" << m_id;
     oss << ", bsdf=" << m_bsdf->to_string() << "]";
     return oss.str();
+}
+
+
+void Edge_Graph::print() {
+    // std::cout << "total Vertex: " << vertices.size() << std::endl;
+    // std::cout << "total edge: " << edge_map.size() << std::endl;
+    std::cout << "total Segment: " << jump.size() << std::endl;
+}
+
+void Edge_Graph::config(const Vector3fD& vertex_positions, const Vector2iD& valid_edge_indices, int vertex_size, const EdgeSortOption& sort_option) {
+    PSDR_ASSERT(sort_option.enable_sort == true);
+    edge_id.clear();
+    draw.clear();
+    jump.clear();
+    vertices.clear();
+    edge_map.clear();
+    m_edge_indices_map.clear();
+    cos_data.clear();
+    length_data.clear();
+
+
+    m_edge_sort = sort_option;
+    // auto start = std::chrono::high_resolution_clock::now();
+
+    const Vector3fC &m_vertex_positions_ = detach(vertex_positions);
+    const Vector2iC &m_valid_edge_indices_ = detach(valid_edge_indices);
+    copy_cuda_array<float, 3>(m_vertex_positions_, m_vertex_positions);
+    copy_cuda_array<int  , 2>(m_valid_edge_indices_, m_edge_indices);
+
+    int index_size = m_edge_indices[0].size();
+
+    // auto stop = std::chrono::high_resolution_clock::now();
+    // std::cout << "Copy from GPU to CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() / 1000000.0f << " second" << std::endl;
+    // start = stop;
+
+
+    for (int i=0; i<vertex_size; ++i) {
+        std::vector<int> temp;
+        vertices[i] = temp;
+    }
+
+    for (int i=0; i<index_size; ++i) {
+        int e1 = m_edge_indices[0][i];
+        int e2 = m_edge_indices[1][i];
+        vertices[e1].push_back(e2);
+        vertices[e2].push_back(e1);
+    }
+
+    for (int i=0; i<index_size; ++i) {
+        std::pair<int,int> ind_key(m_edge_indices[0][i], m_edge_indices[1][i]);
+        m_edge_indices_map[ind_key] = i;
+    }
+
+    for (int i=0; i<vertex_size; ++i) {
+        for (int j=0; j<vertices[i].size(); ++j) {
+            std::pair<int,int> edge_key(i, vertices[i][j]);
+            if (edge_key.first > edge_key.second) {
+                std::swap(edge_key.first, edge_key.second);
+            }
+            edge_map[edge_key].first = false;
+            std::pair<int,int> sec_key(edge_key.first, edge_key.second);
+            edge_map[edge_key].second = m_edge_indices_map[sec_key];
+        }
+    }
+
+    // stop = std::chrono::high_resolution_clock::now();
+    // std::cout << "Building data structure: " << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() / 1000000.0f << " second" << std::endl;
+    // start = stop;
+    cut_thold = cos(sort_option.local_angle * M_PI / 180.f);
+    global_cut_thold = cos(sort_option.global_angle * M_PI / 180.f);
+
+    // TODO: start at any node and give up odd vertices?
+    for(auto iter = vertices.begin(); iter != vertices.end(); ++iter)
+    {
+        for (auto &v : iter->second) {
+            std::pair<int,int> temp(v, iter->first);
+            if (temp.first > temp.second) {
+                std::swap(temp.first, temp.second);
+            }
+            if (edge_map[temp].first == false) {
+                Greedy(v, iter->first);
+                jump.push_back(draw.size()-1);
+            }
+        }
+    }
+
+    // stop = std::chrono::high_resolution_clock::now();
+    // std::cout << "Greedy search edges: " << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() / 1000000.0f << " second" << std::endl;
+    // start = stop;
+
+    double cos_sum = std::accumulate(cos_data.begin(), cos_data.end(), 0.0);
+    double cos_mean = cos_sum / cos_data.size();
+
+    double cos_sq_sum = std::inner_product(cos_data.begin(), cos_data.end(), cos_data.begin(), 0.0);
+    double cos_stdev = std::sqrt(cos_sq_sum / cos_data.size() - cos_mean * cos_mean);
+
+    // std::cout << cos_data.size() << " Average edge angle: mean = " << cos_mean << " degree +- " << cos_stdev << std::endl;
+
+    double length_sum = std::accumulate(length_data.begin(), length_data.end(), 0.0);
+    double length_mean = length_sum / length_data.size();
+
+    double length_sq_sum = std::inner_product(length_data.begin(), length_data.end(), length_data.begin(), 0.0);
+    double length_stdev = std::sqrt(length_sq_sum / length_data.size() - length_mean * length_mean);
+
+    // std::cout << length_data.size() << " Average edge length: mean = " << length_mean << " +- " << length_stdev << std::endl;
+
+    // stop = std::chrono::high_resolution_clock::now();
+    // start = stop;
+
+    std::vector<int> ind1;
+    std::vector<int> ind2;
+
+    ind1.resize(draw.size());
+    ind2.resize(draw.size());
+
+    for (int i=0; i<draw.size(); ++i) {
+            ind1[i] = draw[i].first;
+            ind2[i] = draw[i].second;
+    }
+
+    std::map<std::pair<int,int>, int>        draw_map;
+    for (int i=0; i<draw.size(); ++i) {
+        std::pair<int, int> draw_temp(ind1[i], ind2[i]);
+        if (draw_temp.first > draw_temp.second) {
+            std::swap(draw_temp.first, draw_temp.second);
+        }
+        draw_map[draw_temp] = i;
+    }
+
+    sorted_indices = Vector2iD(IntD::copy(ind1.data(), draw.size()),
+                               IntD::copy(ind2.data(), draw.size()));
+    std::vector<int> sorted_edge;
+    for (int i=0; i<edge_id.size(); ++i) {
+        std::pair<int, int> edge_temp_map(m_edge_indices[0][i], m_edge_indices[1][i]);
+        sorted_edge.push_back(draw_map[edge_temp_map]);
+    }
+    sorted_edge_id = IntD::copy(sorted_edge.data(), sorted_edge.size());
+
+    // stop = std::chrono::high_resolution_clock::now();
+    // std::cout << "Copy to GPU: " << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() / 1000000.0f << " second" << std::endl;
+    // start = stop;
+
+    print();
+}
+
+void Edge_Graph::Greedy(int init_curr, int init_prev) {
+    int curr = init_curr;
+    int prev = init_prev;
+    int steps = 0;
+    float best_cos = -1.0f;
+    float best_global_cos = -1.0f;
+
+    float p0_x_init = m_vertex_positions[0][init_prev];
+    float p0_y_init = m_vertex_positions[1][init_prev];
+    float p0_z_init = m_vertex_positions[2][init_prev];
+
+    while(true) {
+        draw.push_back(std::pair<int,int>(prev, curr));
+        std::pair<int,int> temp(prev, curr);
+        if (temp.first > temp.second) {
+            std::swap(temp.first, temp.second);
+        }
+        // PSDR_ASSERT(edge_map[temp].first == false);
+        edge_map[temp].first = true;
+        edge_id.push_back(edge_map[temp].second);
+        steps++;
+        if (steps >= m_edge_sort.max_depth) {
+            break;
+        }
+
+        // use a loop to find the best cos:
+        int best_id = -1;
+        int best_global_id = -1;
+
+        best_cos = 1.1f;
+        best_global_cos = 1.1f;
+
+
+        for (int i=0; i<vertices[curr].size(); ++i) {
+            std::pair<int,int> temp2(curr, vertices[curr][i]);
+            if (temp2.first > temp2.second) {
+                std::swap(temp2.first, temp2.second);
+            }
+            if (edge_map[temp2].first == false) {
+
+
+                float p0_x = m_vertex_positions[0][prev];
+                float p0_y = m_vertex_positions[1][prev];
+                float p0_z = m_vertex_positions[2][prev];
+
+                float p1_x = m_vertex_positions[0][curr];
+                float p1_y = m_vertex_positions[1][curr];
+                float p1_z = m_vertex_positions[2][curr];
+                float p2_x = m_vertex_positions[0][vertices[curr][i]];
+                float p2_y = m_vertex_positions[1][vertices[curr][i]];
+                float p2_z = m_vertex_positions[2][vertices[curr][i]];
+
+                float e1_x = p0_x - p1_x;
+                float e1_y = p0_y - p1_y;
+                float e1_z = p0_z - p1_z;
+                float e1_norm = sqrt(e1_x*e1_x + e1_y*e1_y + e1_z*e1_z);
+                float e2_x = p2_x - p1_x;
+                float e2_y = p2_y - p1_y;
+                float e2_z = p2_z - p1_z;
+                float e2_norm = sqrt(e2_x*e2_x + e2_y*e2_y + e2_z*e2_z);
+
+                float cos_val = (e1_x*e2_x + e1_y*e2_y + e1_z*e2_z) / (e1_norm * e2_norm);
+
+                e1_x = p0_x_init - p1_x;
+                e1_y = p0_y_init - p1_y;
+                e1_z = p0_z_init - p1_z;
+                e1_norm = sqrt(e1_x*e1_x + e1_y*e1_y + e1_z*e1_z);
+                e2_x = p2_x - p1_x;
+                e2_y = p2_y - p1_y;
+                e2_z = p2_z - p1_z;
+                e2_norm = sqrt(e2_x*e2_x + e2_y*e2_y + e2_z*e2_z);
+
+                float cos_global_val = (e1_x*e2_x + e1_y*e2_y + e1_z*e2_z) / (e1_norm * e2_norm);
+
+                if (cos_val < best_cos) {
+                    best_cos = cos_val;
+                    best_id = i;
+                }
+
+                if (cos_global_val < best_global_cos) {
+                    best_global_cos = cos_global_val;
+                    best_global_id = i;
+                }
+
+            }
+        }
+
+        if  (best_global_id != -1) {
+            std::pair<int,int> temp2(curr, vertices[curr][best_global_id]);
+            if (temp2.first > temp2.second) {
+                std::swap(temp2.first, temp2.second);
+            }
+            if (edge_map[temp2].first == false) {
+                prev = curr;
+                curr = vertices[prev][best_global_id];
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+
+        if (best_cos > cut_thold || (best_global_cos > global_cut_thold && steps > m_edge_sort.min_global_step)) {
+            break;
+        } else {
+            cos_data.push_back(best_global_cos);
+        }
+        
+    }
+
+    length_data.push_back(static_cast<double>(steps));
 }
 
 } // namespace psdr

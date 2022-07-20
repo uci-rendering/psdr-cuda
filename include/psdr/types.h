@@ -94,6 +94,9 @@ using Matrix3fD = Matrix3f<true>;
 using Matrix4fC = Matrix4f<false>;
 using Matrix4fD = Matrix4f<true>;
 
+using Matrix3x3fC = Matrix<Vector3fC, 3>;
+using Matrix1x3fC = Matrix<Vector3fC, 1>;
+
 // Mask arrays (GPU)
 
 template <bool ad>
@@ -110,6 +113,8 @@ using Spectrum  = Vectorf<PSDR_NUM_CHANNELS, ad>;
 using SpectrumC = Spectrum<false>;
 using SpectrumD = Spectrum<true>;
 
+
+// 
 /********************************************
  * CPU types
  ********************************************/
@@ -161,6 +166,23 @@ using TriangleUVD   = TriangleUV<true>;
  * Others
  ********************************************/
 
+template <typename Float_>
+struct AQLeaf_ {
+    Vectorf<8, false>       poly;
+    Vector3f<false>         p0, p1;
+    ENOKI_STRUCT(AQLeaf_, p0, p1, poly)
+};
+
+template <typename Float_>
+struct Tree_ {
+    Float_         p0, p1;
+    ENOKI_STRUCT(Tree_, p0, p1)
+};
+
+
+using AQLeaf  = AQLeaf_<FloatC>;
+using tree3D  = Tree_<Vector3fC>;
+
 // For samplers
 
 using UIntC     = Type<uint32_t, false>;
@@ -181,7 +203,49 @@ struct RenderOption {
     int log_level;
 };
 
+struct EdgeSortOption {
+    EdgeSortOption() : enable_sort(false), local_angle(180), global_angle(180), min_global_step(1), max_depth(1) {}
+    bool enable_sort;
+    float local_angle;
+    float global_angle;
+    int   min_global_step;
+    int   max_depth;
+};
+
+
+struct AQ_Option {
+    AQ_Option() {};
+    AQ_Option(const std::vector<float> &config, int option) {
+        num_x = config[0];
+        num_y = config[1];
+        num_z = config[2];
+        thold = config[3];
+        wt1 = config[4];
+        max_memory = static_cast<int>(config[5]);
+        max_depth = static_cast<int>(config[6]);
+        final_spp = static_cast<int>(config[7]);
+        RMSE_wt   = config[8];
+        eps       = config[9];
+
+        guiding_option = option;
+    }
+    float num_x;
+    float num_y;
+    float num_z;
+    float thold;
+    float wt1;
+    int max_memory;
+    int max_depth;
+    int final_spp;
+
+    float RMSE_wt;
+    float eps;
+    int guiding_option;
+};
+
 } // namespace psdr
 
 ENOKI_STRUCT_SUPPORT(psdr::TriangleInfo_, p0, e1, e2, n0, n1, n2,
                                           face_normal, face_area)
+ENOKI_STRUCT_SUPPORT(psdr::AQLeaf_, p0, p1, poly)
+ENOKI_STRUCT_SUPPORT(psdr::Tree_, p0, p1)

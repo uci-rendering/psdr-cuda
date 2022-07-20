@@ -10,10 +10,10 @@ PSDR_CLASS_DECL_BEGIN(Integrator,, Object)
 public:
     virtual ~Integrator() {}
 
-    SpectrumC renderC(const Scene &scene, int sensor_id = 0) const;
+    SpectrumC renderC(const Scene &scene, int sensor_id = 0, int npass=1) const;
     SpectrumD renderD(const Scene &scene, int sensor_id = 0) const;
 
-    virtual void preprocess_secondary_edges(const Scene &scene, int sensor_id, const ScalarVector4i &reso, int nrounds = 1) {}
+    virtual void preprocess_secondary_edges(const Scene &scene, const std::vector<int> &sensor_id, const std::vector<float> &config, int option = 0) {}
 
 protected:
     virtual SpectrumC Li(const Scene &scene, Sampler &sampler, const RayC &ray, MaskC active = true) const = 0;

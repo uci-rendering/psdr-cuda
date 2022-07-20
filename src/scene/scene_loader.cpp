@@ -9,6 +9,7 @@
 #include <psdr/core/sampler.h>
 #include <psdr/bsdf/diffuse.h>
 #include <psdr/bsdf/roughconductor.h>
+#include <psdr/bsdf/normalmap.h>
 #include <psdr/emitter/area.h>
 #include <psdr/emitter/envmap.h>
 #include <psdr/sensor/perspective.h>
@@ -147,7 +148,7 @@ static std::pair<int, int> load_film(const pugi::xml_node &node) {
 static ScalarVector3f load_rgb(const pugi::xml_node &node) {
     if ( strcmp(node.name(), "float") == 0 ) {
         return ScalarVector3f(node.attribute("value").as_float());
-    } else if ( strcmp(node.name(), "rgb") == 0 ) {
+    } else if ( strcmp(node.name(), "rgb") == 0 || strcmp(node.name(), "spectrum") == 0 ) {
         return parse_vector<3>(node.attribute("value").value(), true);
     } else {
         PSDR_ASSERT_MSG(false, std::string("Unsupported RGB type: ") + node.name());
@@ -226,8 +227,10 @@ void SceneLoader::load_scene(const pugi::xml_document &doc, Scene &scene) {
     }
 
     // Load shapes
+    int shape_id = 0;
     for ( auto node = root.child("shape"); node; node = node.next_sibling("shape") ) {
-        load_shape(node, scene);
+        load_shape(node, scene, shape_id);
+        ++shape_id;
     }
 
     // Build the parameter map
@@ -280,7 +283,7 @@ void SceneLoader::load_sensor(const pugi::xml_node &node, Scene &scene) {
         float far = ( far_node ? far_node.attribute("value").as_float(1e4f) : 1e4f );
 
         Sensor *sensor = new PerspectiveCamera(fov_x, near, far);
-        sensor->m_to_world = Matrix4fD(to_world);
+        sensor->m_to_world_raw = Matrix4fD(to_world);
         scene.m_sensors.push_back(sensor);
     } else {
         PSDR_ASSERT_MSG(false, std::string("Unsupported sensor: ") + sensor_type);
@@ -323,12 +326,9 @@ void SceneLoader::load_bsdf(const pugi::xml_node &node, Scene &scene) {
     const char *bsdf_type = node.attribute("type").value();
     if ( strcmp(bsdf_type, "diffuse") == 0 ) {
         // Diffuse BSDF
-
         pugi::xml_node refl_node = find_child_by_name(node, {"reflectance"});
-
         Diffuse *b = new Diffuse();
         load_texture(refl_node, b->m_reflectance);
-
         bsdf = b;
     } else if ( strcmp(bsdf_type, "roughconductor") == 0 ){
         // roughconductor BSDF
@@ -341,6 +341,38 @@ void SceneLoader::load_bsdf(const pugi::xml_node &node, Scene &scene) {
         load_texture(alpha, b->m_alpha_v);
         load_texture(eta, b->m_eta);
         load_texture(k, b->m_k);
+        bsdf = b;
+    } else if (strcmp(bsdf_type, "normalmap") == 0 ) {
+        pugi::xml_node normalmap_node = find_child_by_name(node, {"normalmap"});
+        pugi::xml_node bsdf_node = node.child("bsdf");
+        std::cout << "WARN: develop normal map" << std::endl;
+        NormalMap *b = new NormalMap();
+        const char *nmap_bsdf_type = bsdf_node.attribute("type").value();
+        b->m_bsdf = nullptr;
+
+        if ( strcmp(nmap_bsdf_type, "diffuse") == 0 ) {
+            // Diffuse BSDF
+            pugi::xml_node nmap_refl_node = find_child_by_name(bsdf_node, {"reflectance"});
+            Diffuse *nmap_b = new Diffuse();
+            load_texture(nmap_refl_node, nmap_b->m_reflectance);
+            b->m_bsdf = nmap_b;
+        } else if ( strcmp(nmap_bsdf_type, "roughconductor") == 0 ){
+            // roughconductor BSDF
+            pugi::xml_node alpha = find_child_by_name(bsdf_node, {"alpha"});
+            pugi::xml_node eta = find_child_by_name(bsdf_node, {"eta"});
+            pugi::xml_node k = find_child_by_name(bsdf_node, {"k"});
+
+            RoughConductor *nmap_b = new RoughConductor();
+            load_texture(alpha, nmap_b->m_alpha_u);
+            load_texture(alpha, nmap_b->m_alpha_v);
+            load_texture(eta, nmap_b->m_eta);
+            load_texture(k, nmap_b->m_k);
+            b->m_bsdf = nmap_b;
+        } else {
+            PSDR_ASSERT_MSG(false, std::string("Unsupported normal map nested BSDF: ") + nmap_bsdf_type);
+        }
+        load_texture(normalmap_node, b->m_nmap);
+        // b->m_nmap.m_data = normalize(b->m_nmap.m_data);
         bsdf = b;
     } else {
         PSDR_ASSERT_MSG(false, std::string("Unsupported BSDF: ") + bsdf_type);
@@ -362,7 +394,7 @@ void SceneLoader::load_bsdf(const pugi::xml_node &node, Scene &scene) {
 }
 
 
-void SceneLoader::load_shape(const pugi::xml_node &node, Scene &scene) {
+void SceneLoader::load_shape(const pugi::xml_node &node, Scene &scene, int shape_id) {
     const char *mesh_id = node.attribute("id").value();
 
     const char *shape_type = node.attribute("type").value();
@@ -415,6 +447,7 @@ void SceneLoader::load_shape(const pugi::xml_node &node, Scene &scene) {
     }
 
     mesh->m_to_world_raw = Matrix4fD(load_transform(node.child("transform")));
+    mesh->m_mesh_id = shape_id;
     scene.m_meshes.push_back(mesh);
 }
 

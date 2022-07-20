@@ -27,8 +27,17 @@ def vertex_transform(sc, mesh_ID, vertex_ID, dir_vector, orig_vtx_pos, P):
 
 def material_roughness(sc, bsdf_ID, alpha, P):
     para = "BSDF[" + str(bsdf_ID) + "]"
+    sc.param_map[para].roughness.data = FloatD(alpha) + P
+
+def material_diffuse(sc, bsdf_ID, alpha, P):
+    para = "BSDF[" + str(bsdf_ID) + "]"
+    sc.param_map[para].diffuseReflectance.data = Vector3fD(alpha) + Vector3fD(0.01, -0.01, 0) * P
+
+def rc_roughness(sc, bsdf_ID, alpha, P):
+    para = "BSDF[" + str(bsdf_ID) + "]"
     sc.param_map[para].alpha_u.data = FloatD(alpha[0]) + P
     sc.param_map[para].alpha_v.data = FloatD(alpha[1]) + P
+
 
 def envmap_rotate(sc, emitter_ID, axis, angle):
     para = "Emitter[" + str(emitter_ID) + "]"

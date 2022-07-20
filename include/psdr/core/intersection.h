@@ -40,6 +40,10 @@ struct Intersection_ : public Interaction_<Float_> {
     MeshArray<ad>       shape;
 
     Vector3f<ad>        n;                  // geometric normal
+
+    /// Position partials wrt. the UV parameterization
+    Vector3f<ad>        dp_du, dp_dv;
+
     Frame<ad>           sh_frame;           // shading frame
 
     Vector2f<ad>        uv;
@@ -47,7 +51,7 @@ struct Intersection_ : public Interaction_<Float_> {
 
     ENOKI_DERIVED_STRUCT(Intersection_, Interaction_<Float_>,
         ENOKI_BASE_FIELDS(wi, p, t),
-        ENOKI_DERIVED_FIELDS(shape, n, sh_frame, uv, J)
+        ENOKI_DERIVED_FIELDS(shape, n, dp_du, dp_dv, sh_frame, uv, J)
     )
 };
 
@@ -68,4 +72,4 @@ struct Intersection_ : public Interaction_<Float_> {
 } // namespace psdr
 
 ENOKI_STRUCT_SUPPORT(psdr::Interaction_, wi, p, t)
-ENOKI_STRUCT_SUPPORT(psdr::Intersection_, wi, p, t, shape, n, sh_frame, uv, J)
+ENOKI_STRUCT_SUPPORT(psdr::Intersection_, wi, p, t, shape, n, dp_du, dp_dv, sh_frame, uv, J)

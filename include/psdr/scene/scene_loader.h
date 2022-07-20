@@ -22,7 +22,7 @@ protected:
     static void load_sensor(const pugi::xml_node &node, Scene &scene);
     static void load_emitter(const pugi::xml_node &node, Scene &scene);
     static void load_bsdf(const pugi::xml_node &node, Scene &scene);
-    static void load_shape(const pugi::xml_node &node, Scene &scene);
+    static void load_shape(const pugi::xml_node &node, Scene &scene, int shape_id = -1);
 };
 
 } // namespace psdr

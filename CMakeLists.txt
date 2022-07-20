@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 2.9.0 FATAL_ERROR)
-cmake_policy(VERSION 2.6)
+cmake_minimum_required(VERSION 3.0.0 FATAL_ERROR)
 cmake_policy(SET CMP0048 NEW)
 cmake_policy(SET CMP0072 NEW)
 cmake_policy(SET CMP0074 NEW)
@@ -12,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if( WIN32 )
     add_definitions(-D_USE_MATH_DEFINES -D_CRT_SECURE_NO_WARNINGS -DNDEBUG)
 else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG -Wall")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG -Wall -fPIC")
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMake" ${CMAKE_MODULE_PATH})
@@ -20,10 +19,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMake" ${CMAKE_MODULE_PATH})
 if( WIN32 )
     set(ENOKI_DIR ${CMAKE_SOURCE_DIR}/ext_win64/enoki)
     set(PYBIND11_ROOT ${CMAKE_SOURCE_DIR}/ext_win64/pybind11)
-    # set(PYTHON_ROOT C:/ProgramData/Miniconda3)
-    if ( NOT PYTHON_ROOT )
-        message(FATAL_ERROR "PYTHON_ROOT not set!, check CMakeLists.txt line 23")
-    endif()
+    set(PYTHON_ROOT C:/ProgramData/Miniconda3)
 else()
     if ( NOT ENOKI_DIR )
         message(FATAL_ERROR "ENOKI_DIR not set!")
@@ -44,7 +40,7 @@ OPTION(CUDA_REMOVE_GLOBAL_MEMORY_SPACE_WARNING
 option(CUDA_GENERATE_DEPENDENCIES_DURING_CONFIGURE
        "Generate dependencies during configure time instead of only during build time." OFF)
 
-find_package(CUDA 10.0 REQUIRED)
+find_package(CUDA 11.0 REQUIRED)
 mark_as_advanced(CLEAR CUDA_64_BIT_DEVICE_CODE)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
@@ -57,6 +53,7 @@ else()
     set(OptiX_INSTALL_DIR "${CMAKE_SOURCE_DIR}/ext/optix" CACHE PATH "Path to OptiX installed location.")
 endif()
 find_package(OptiX REQUIRED)
+
 
 set(CUDA_GENERATED_OUTPUT_DIR "${CMAKE_BINARY_DIR}/lib/ptx")
 
@@ -128,6 +125,7 @@ set(PSDR_INCLUDE_DIR include/psdr)
 set(PSDR_SOURCE_DIR src)
 
 set(PSDR_SOURCE_FILES
+
     ${PSDR_INCLUDE_DIR}/psdr.h
     ${PSDR_INCLUDE_DIR}/constants.h
     ${PSDR_INCLUDE_DIR}/fwd.h
@@ -142,15 +140,20 @@ set(PSDR_SOURCE_FILES
     ${PSDR_SOURCE_DIR}/core/bitmap.cpp
     ${PSDR_INCLUDE_DIR}/core/bitmap_loader.h
     ${PSDR_SOURCE_DIR}/core/bitmap_loader.cpp
-    ${PSDR_INCLUDE_DIR}/core/tinyexr.h
-    ${PSDR_INCLUDE_DIR}/core/miniz.h
-    ${PSDR_SOURCE_DIR}/core/miniz.cpp
     ${PSDR_INCLUDE_DIR}/core/sampler.h
     ${PSDR_SOURCE_DIR}/core/sampler.cpp
     ${PSDR_INCLUDE_DIR}/core/pmf.h
     ${PSDR_SOURCE_DIR}/core/pmf.cpp
     ${PSDR_INCLUDE_DIR}/core/cube_distrb.h
     ${PSDR_SOURCE_DIR}/core/cube_distrb.cpp
+
+    ${PSDR_INCLUDE_DIR}/core/AQ_distrb.h
+    ${PSDR_SOURCE_DIR}/core/AQ_distrb.cpp
+
+    ${PSDR_INCLUDE_DIR}/core/tinyexr.h
+    ${PSDR_INCLUDE_DIR}/core/miniz.h
+    ${PSDR_SOURCE_DIR}/core/miniz.cpp
+
     ${PSDR_INCLUDE_DIR}/core/records.h
     ${PSDR_INCLUDE_DIR}/core/warp.h
     ${PSDR_INCLUDE_DIR}/core/transform.h
@@ -188,17 +191,30 @@ set(PSDR_SOURCE_FILES
     ${PSDR_SOURCE_DIR}/integrator/field.cpp
     ${PSDR_INCLUDE_DIR}/integrator/direct.h
     ${PSDR_SOURCE_DIR}/integrator/direct.cpp
+
+    ${PSDR_INCLUDE_DIR}/bsdf/normalmap.h
+    ${PSDR_SOURCE_DIR}/bsdf/normalmap.cpp
+
     ${PSDR_SOURCE_DIR}/psdr.cpp
+)
+
+set(CUDA_SOURCE_FILES
+    ./cuda/kernel/util.cu
+    ./cuda/kernel/NEE.cu
 )
 
 if( WIN32 )
     add_subdirectory(${PYBIND11_ROOT})
+    cuda_add_library(cu_library STATIC ${CUDA_SOURCE_FILES})
+    cuda_add_cublas_to_target(cu_library)
     pybind11_add_module(psdr_cuda ${PSDR_SOURCE_FILES})
     target_compile_options(psdr_cuda PRIVATE /O2 /wd4251 /MP)
-    target_link_libraries(psdr_cuda PRIVATE ${PYPSDR_LIBRARIES} ${CUDA_LIBRARIES})
+    target_link_libraries(psdr_cuda PRIVATE cu_library ${PYPSDR_LIBRARIES} ${CUDA_LIBRARIES})
 else()
+    cuda_add_library(cu_library STATIC ${CUDA_SOURCE_FILES})
+    cuda_add_cublas_to_target(cu_library)
     cuda_add_library(psdr_cuda MODULE ${PSDR_SOURCE_FILES})
-    target_link_libraries(psdr_cuda ${PYPSDR_LIBRARIES} ${CUDA_LIBRARIES})
+    target_link_libraries(psdr_cuda cu_library ${PYPSDR_LIBRARIES} ${CUDA_LIBRARIES})
 endif()
 
 

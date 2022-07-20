@@ -19,7 +19,7 @@ public:
     Float<ad> eval(const Vector3f<ad>& m) const;
 
     template <bool ad>
-    Vector3f<ad> sample(const Vector3f<ad>& wi, const Vector3f<ad>& sample) const;
+    std::pair<Vector3f<ad>, Float<ad>> sample(const Vector3f<ad>& wi, const Vector3f<ad>& sample) const;
 
     template <bool ad>
     Float<ad> smith_g1(const Vector3f<ad>& v, const Vector3f<ad>& m) const;

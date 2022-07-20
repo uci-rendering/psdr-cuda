@@ -10,7 +10,7 @@ void DiscreteDistribution::init(const FloatC &pmf) {
     m_pmf = pmf;
     m_cmf = psum(m_pmf);
     m_pmf_normalized = pmf/m_sum;
-    //std::cout << m_cmf << std::endl;
+    m_cmf_normalized = m_cmf/m_sum;
 }
 
 

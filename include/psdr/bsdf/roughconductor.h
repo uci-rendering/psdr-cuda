@@ -29,6 +29,10 @@ public:
     BSDFSampleC sample(const IntersectionC &its, const Vector3fC &sample, MaskC active = true) const override;
     BSDFSampleD sample(const IntersectionD &its, const Vector3fD &sample, MaskD active = true) const override;
 
+    BSDFSampleDualC sampleDual(const IntersectionC &its, const Vector3fC &sample, MaskC active = true) const override;
+    BSDFSampleDualD sampleDual(const IntersectionD &its, const Vector3fD &sample, MaskD active = true) const override;
+
+
     FloatC pdf(const IntersectionC &its, const Vector3fC &wo, MaskC active = true) const override;
     FloatD pdf(const IntersectionD &its, const Vector3fD &wo, MaskD active = true) const override;
 
@@ -47,6 +51,9 @@ protected:
 
     template <bool ad>
     BSDFSample<ad> __sample(const Intersection<ad>&, const Vector3f<ad>&, Mask<ad>) const;
+
+    template <bool ad>
+    BSDFSampleDual<ad> __sampleDual(const Intersection<ad> &its, const Vector3f<ad> &wo, Mask<ad> active = true) const;
 
     template <bool ad>
     Float<ad> __pdf(const Intersection<ad> &, const Vector3f<ad> &, Mask<ad>) const;

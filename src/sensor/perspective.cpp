@@ -19,6 +19,8 @@ void PerspectiveCamera::configure() {
     m_camera_to_sample = Matrix4fD(camera_to_sample);
     m_sample_to_camera = Matrix4fD(inverse(camera_to_sample));
 
+    Matrix4fD m_to_world = m_to_world_left * m_to_world_raw * m_to_world_right;
+
     m_world_to_sample = m_camera_to_sample*inverse(m_to_world);
     m_sample_to_world = m_to_world*m_sample_to_camera;
 
@@ -54,15 +56,38 @@ void PerspectiveCamera::configure() {
                           n0 = gather<Vector3fD>(mesh->m_triangle_info->face_normal, mesh->m_edge_indices[2]),
                           n1 = gather<Vector3fD>(mesh->m_triangle_info->face_normal, mesh->m_edge_indices[3], valid);
 
+                // add UV edge
+                MaskD uv_mask;
+
+                if (mesh->m_has_uv) {
+                    Vector3iD fuv1 = gather<Vector3iD>(mesh->m_face_uv_indices, mesh->m_edge_indices[2]);
+                    Vector3iD fuv2 = gather<Vector3iD>(mesh->m_face_uv_indices, mesh->m_edge_indices[3]);
+                    IntC uv_cut = zero<IntC>(slices(valid));
+                    uv_cut = select( (eq(fuv1[0], fuv2[0]) || eq(fuv1[0], fuv2[1]) || eq(fuv1[0], fuv2[2])), IntC(1), 0);
+                    uv_cut = select( (eq(fuv1[1], fuv2[0]) || eq(fuv1[1], fuv2[1]) || eq(fuv1[1], fuv2[2])), uv_cut+1, uv_cut);
+                    uv_cut = select( (eq(fuv1[2], fuv2[0]) || eq(fuv1[2], fuv2[1]) || eq(fuv1[2], fuv2[2])), uv_cut+1, uv_cut);
+
+                    uv_mask = neq(uv_cut, 2);
+                    PSDR_ASSERT(any(neq(uv_cut, 3)));
+                }
+
                 if ( mesh->m_use_face_normals ) {
                     MaskD skip = valid;
                     skip &= (dot(e0, n0) < Epsilon && dot(e1, n1) < Epsilon) ||
                             (dot(n0, n1) > 1.f - Epsilon);
-                    info = compressD<Vectori<5, true>>(mesh->m_edge_indices, ~skip);
+                    if (mesh->m_has_uv) {
+                        info = compressD<Vectori<5, true>>(mesh->m_edge_indices, ~skip || uv_mask);
+                    } else {
+                        info = compressD<Vectori<5, true>>(mesh->m_edge_indices, ~skip);
+                    }
                 } else {
                     MaskD active = ~valid;
                     active |= (dot(e0, n0) > Epsilon)^(dot(e1, n1) > Epsilon);
-                    info = compressD<Vectori<5, true>>(mesh->m_edge_indices, active);
+                    if (mesh->m_has_uv) {
+                        info = compressD<Vectori<5, true>>(mesh->m_edge_indices, active || uv_mask);
+                    } else {
+                        info = compressD<Vectori<5, true>>(mesh->m_edge_indices, active);
+                    }
                 }
                 PSDR_ASSERT(slices(info) > 0);
 
@@ -119,6 +144,7 @@ std::string PerspectiveCamera::to_string() const {
 
 RayC PerspectiveCamera::sample_primary_ray(const Vector2fC &samples) const {
     Vector3fC d = normalize(transform_pos<FloatC>(detach(m_sample_to_camera), concat(samples, 0.f)));
+    Matrix4fD m_to_world = m_to_world_left * m_to_world_raw * m_to_world_right;
     Matrix4fC to_world = detach(m_to_world);
     return RayC(
         transform_pos<FloatC>(to_world, zero<Vector3fC>(slices(samples))),
@@ -129,6 +155,7 @@ RayC PerspectiveCamera::sample_primary_ray(const Vector2fC &samples) const {
 
 RayD PerspectiveCamera::sample_primary_ray(const Vector2fD &samples) const {
     Vector3fD d = normalize(transform_pos<FloatD>(m_sample_to_camera, concat(samples, 0.f)));
+    Matrix4fD m_to_world = m_to_world_left * m_to_world_raw * m_to_world_right;
     return RayD(
         transform_pos<FloatD>(m_to_world, zero<Vector3fD>(slices(samples))),
         transform_dir<FloatD>(m_to_world, d)

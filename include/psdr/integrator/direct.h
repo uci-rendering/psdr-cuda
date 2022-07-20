@@ -7,11 +7,13 @@ namespace psdr
 
 PSDR_CLASS_DECL_BEGIN(DirectIntegrator, final, Integrator)
 public:
-    DirectIntegrator(int bsdf_samples = 1, int light_samples = 1);
+    DirectIntegrator(int bsdf_samples = 1, int light_samples = 1, int edge_direct = 1);
     virtual ~DirectIntegrator();
 
-    void preprocess_secondary_edges(const Scene &scene, int sensor_id, const ScalarVector4i &reso, int nrounds = 1) override;
-
+    FloatC get_grid();
+    
+    void preprocess_secondary_edges(const Scene &scene, const std::vector<int> &sensor_id, const std::vector<float> &config, int option = 0) override;
+    
     bool m_hide_emitters = false;
 
 protected:
@@ -25,9 +27,21 @@ protected:
 
     template <bool ad>
     std::pair<IntC, Spectrum<ad>> eval_secondary_edge(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3) const;
+    
+    template <bool ad>
+    std::pair<IntC, Spectrum<ad>> __eval_secondary_edge(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3, bool emitter_sampling) const;
 
-    int m_bsdf_samples, m_light_samples;
+    template <bool ad>
+    BoundaryMISRecord<ad> __eval_secondary_edgeMIS(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3, bool emitter_sampling) const;
+
+    int m_bsdf_samples, m_light_samples, m_edge_direct;
     std::vector<HyperCubeDistribution3f*> m_warpper;
+    std::vector<AdaptiveQuadratureDistribution3f*>      m_aq;
+    std::vector<AdaptiveQuadratureDistribution3f*>      m_aq_emitter;
+
+    AdaptiveQuadratureDistribution3f*                   m_global_aq = nullptr;
+    int preprocess_option = -1;
+
 PSDR_CLASS_DECL_END(DirectIntegrator)
 
 } // namespace psdr

@@ -21,6 +21,10 @@ struct Sampler {
         return Vector2f<ad>(next_1d<ad>(), next_1d<ad>());
     }
 
+    template <bool ad> inline Vector3f<ad> next_3d() {
+        return Vector3f<ad>(next_1d<ad>(), next_1d<ad>(), next_1d<ad>());
+    }
+
     template <int n, bool ad> inline Vectorf<n, ad> next_nd() {
         static_assert(n > 0);
         if constexpr ( n == 1 ) {

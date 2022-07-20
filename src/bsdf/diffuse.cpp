@@ -42,16 +42,28 @@ BSDFSampleD Diffuse::sample(const IntersectionD &its, const Vector3fD &sample, M
     return __sample<true>(its, sample, active);
 }
 
+BSDFSampleDualC Diffuse::sampleDual(const IntersectionC &its, const Vector3fC &sample, MaskC active) const {
+    PSDR_ASSERT(0);
+    BSDFSampleDualC bs;
+    return bs;
+}
+
+
+BSDFSampleDualD Diffuse::sampleDual(const IntersectionD &its, const Vector3fD &sample, MaskD active) const {
+    PSDR_ASSERT(0);
+    BSDFSampleDualD bs;
+    return bs;
+}
 
 template <bool ad>
 BSDFSample<ad> Diffuse::__sample(const Intersection<ad> &its, const Vector3f<ad> &sample, Mask<ad> active) const {
     Float<ad> cos_theta_i = Frame<ad>::cos_theta(its.wi);
     BSDFSample<ad> bs;
-
     bs.wo = warp::square_to_cosine_hemisphere<ad>(tail<2>(sample));
+    bs.eta = 1.0f;
     bs.pdf = warp::square_to_cosine_hemisphere_pdf<ad>(bs.wo);
     bs.is_valid = active && (cos_theta_i > 0.f);
-    return bs;
+    return detach(bs);
 }
 
 
