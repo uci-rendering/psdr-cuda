@@ -1,5 +1,6 @@
 ## This repository is deprecated
-this project will be replaced by psdr-jit
+this project will be replaced by [`psdr-jit`](https://github.com/andyyankai/psdr-jit)
+
 
 # psdr-cuda
 Path-space differentiable renderer
