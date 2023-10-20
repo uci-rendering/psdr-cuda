@@ -45,9 +45,14 @@ struct Intersection_ : public Interaction_<Float_> {
     Vector2f<ad>        uv;
     Float<ad>           J;                  // Jacobian determinant for material-form reparam
 
+    Int<ad>             v0_idx,
+                        v1_idx,
+                        v2_idx;             // indices of the three vertices into the mesh's vertex array
+    Vector2f<ad>        barycentric_uv;     // barycentric coordinates of the intersection point
+
     ENOKI_DERIVED_STRUCT(Intersection_, Interaction_<Float_>,
         ENOKI_BASE_FIELDS(wi, p, t),
-        ENOKI_DERIVED_FIELDS(shape, n, sh_frame, uv, J)
+        ENOKI_DERIVED_FIELDS(shape, n, sh_frame, uv, J, v0_idx, v1_idx, v2_idx, barycentric_uv)
     )
 };
 
@@ -68,4 +73,4 @@ struct Intersection_ : public Interaction_<Float_> {
 } // namespace psdr
 
 ENOKI_STRUCT_SUPPORT(psdr::Interaction_, wi, p, t)
-ENOKI_STRUCT_SUPPORT(psdr::Intersection_, wi, p, t, shape, n, sh_frame, uv, J)
+ENOKI_STRUCT_SUPPORT(psdr::Intersection_, wi, p, t, shape, n, sh_frame, uv, J, v0_idx, v1_idx, v2_idx, barycentric_uv)

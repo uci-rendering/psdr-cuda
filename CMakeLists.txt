@@ -188,6 +188,8 @@ set(PSDR_SOURCE_FILES
     ${PSDR_SOURCE_DIR}/integrator/field.cpp
     ${PSDR_INCLUDE_DIR}/integrator/direct.h
     ${PSDR_SOURCE_DIR}/integrator/direct.cpp
+    ${PSDR_INCLUDE_DIR}/integrator/directlighting.h
+    ${PSDR_SOURCE_DIR}/integrator/directlighting.cpp
     ${PSDR_SOURCE_DIR}/psdr.cpp
 )
 

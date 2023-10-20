@@ -6,3 +6,6 @@ ext/
 ext_win64/
 local/
 examples/outputs/
+
+.idea
+/experiments

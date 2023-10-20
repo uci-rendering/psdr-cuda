@@ -24,6 +24,12 @@ public:
 
     bool anisotropic() const override { return false; }
 
+    SpectrumC albedo(const IntersectionC &its, MaskC active) const override;
+    SpectrumD albedo(const IntersectionD &its, MaskD active) const override;
+
+    SpectrumC eval_demod(const IntersectionC &its, const Vector3fC &wo, MaskC active = true) const override;
+    SpectrumD eval_demod(const IntersectionD &its, const Vector3fD &wo, MaskD active = true) const override;
+
     std::string to_string() const override { return std::string("Diffuse[id=") + m_id + "]"; }
 
     Bitmap3fD m_reflectance;
@@ -37,6 +43,12 @@ protected:
 
     template <bool ad>
     Float<ad> __pdf(const Intersection<ad> &, const Vector3f<ad> &, Mask<ad>) const;
+
+    template <bool ad>
+    Spectrum<ad> __albedo(const Intersection<ad>&, Mask<ad>) const;
+
+    template <bool ad>
+    Spectrum<ad> __eval_demod(const Intersection<ad>&, const Vector3f<ad>&, Mask<ad>) const;
 PSDR_CLASS_DECL_END(Diffuse)
 
 } // namespace psdr

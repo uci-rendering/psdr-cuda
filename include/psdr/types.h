@@ -138,11 +138,13 @@ struct TriangleInfo_ {
 
     Vector3f<ad> p0, e1, e2, n0, n1, n2, face_normal;
     Float<ad>    face_area;
+    Int<ad>      v0_idx, v1_idx, v2_idx;
 
     ENOKI_STRUCT(TriangleInfo_, p0, e1, e2,
                                 n0, n1, n2,
                                 face_normal,
-                                face_area)
+                                face_area,
+                                v0_idx, v1_idx, v2_idx)
 };
 
 template <bool ad>
@@ -184,4 +186,5 @@ struct RenderOption {
 } // namespace psdr
 
 ENOKI_STRUCT_SUPPORT(psdr::TriangleInfo_, p0, e1, e2, n0, n1, n2,
-                                          face_normal, face_area)
+                                          face_normal, face_area,
+                                          v0_idx, v1_idx, v2_idx)

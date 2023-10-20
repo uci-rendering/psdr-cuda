@@ -5,7 +5,7 @@
 namespace psdr
 {
 
-PSDR_CLASS_DECL_BEGIN(DirectIntegrator, final, Integrator)
+PSDR_CLASS_DECL_BEGIN(DirectIntegrator, , Integrator)
 public:
     DirectIntegrator(int bsdf_samples = 1, int light_samples = 1);
     virtual ~DirectIntegrator();
@@ -23,8 +23,11 @@ protected:
 
     void render_secondary_edges(const Scene &scene, int sensor_id, SpectrumD &result) const override;
 
+    virtual std::pair<IntC, SpectrumC> eval_secondary_edgeC(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3) const;
+    virtual std::pair<IntC, SpectrumD> eval_secondary_edgeD(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3) const;
+
     template <bool ad>
-    std::pair<IntC, Spectrum<ad>> eval_secondary_edge(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3) const;
+    std::pair<IntC, Spectrum<ad>> __eval_secondary_edge(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3) const;
 
     int m_bsdf_samples, m_light_samples;
     std::vector<HyperCubeDistribution3f*> m_warpper;

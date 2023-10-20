@@ -32,6 +32,7 @@
 #include <psdr/integrator/integrator.h>
 #include <psdr/integrator/field.h>
 #include <psdr/integrator/direct.h>
+#include <psdr/integrator/directlighting.h>
 
 namespace py = pybind11;
 using namespace py::literals;
@@ -106,6 +107,7 @@ PYBIND11_MODULE(psdr_cuda, m) {
         .def(py::init<const char*>())
         .def("load_openexr", &Bitmap1fD::load_openexr)
         .def("eval", &Bitmap1fD::eval<true>, "uv"_a, "flip_v"_a = true)
+        .def("at", &Bitmap1fD::at<true>, "idx"_a)
         .def_readwrite("resolution", &Bitmap1fD::m_resolution)
         .def_readwrite("data", &Bitmap1fD::m_data);
 
@@ -116,6 +118,7 @@ PYBIND11_MODULE(psdr_cuda, m) {
         .def(py::init<const char*>())
         .def("load_openexr", &Bitmap3fD::load_openexr)
         .def("eval", &Bitmap3fD::eval<true>, "uv"_a, "flip_v"_a = true)
+        .def("at", &Bitmap3fD::at<true>, "idx"_a)
         .def_readwrite("resolution", &Bitmap3fD::m_resolution)
         .def_readwrite("data", &Bitmap3fD::m_data);
 
@@ -242,6 +245,7 @@ PYBIND11_MODULE(psdr_cuda, m) {
     py::class_<Mesh, Object>(m, "Mesh")
         .def(py::init<>())
         .def("load", &Mesh::load, "filename"_a, "verbose"_a = false)
+        .def("load_mem", &Mesh::load_mem, "vertex_positions"_a, "face_indices"_a, "vertex_uv"_a = Vector2fD(), "face_uv_indices"_a = Vector3iD(), "verbose"_a = false)
         .def("configure", &Mesh::configure)
         .def("set_transform", &Mesh::set_transform, "mat"_a, "set_left"_a = true)
         .def("append_transform", &Mesh::append_transform, "mat"_a, "append_left"_a = true)
@@ -270,6 +274,8 @@ PYBIND11_MODULE(psdr_cuda, m) {
         .def(py::init<>())
         .def("load_file", &Scene::load_file, "file_name"_a, "auto_configure"_a = true)
         .def("load_string", &Scene::load_string, "scene_xml"_a, "auto_configure"_a = true)
+        .def("reload_mesh", &Scene::reload_mesh, "mesh"_a, "file_name"_a, "verbose"_a = false)
+        .def("reload_mesh_mem", &Scene::reload_mesh_mem, "mesh"_a, "vertex_positions"_a, "face_indices"_a, "vertex_uv"_a = Vector2fD(), "face_uv_indices"_a = Vector3iD(), "verbose"_a = false)
         .def("configure", &Scene::configure)
         .def("sample_boundary_segment_direct", &Scene::sample_boundary_segment_direct, "sample3"_a, "active"_a = true)
         .def_readwrite("opts", &Scene::m_opts, "Render options")
@@ -292,4 +298,7 @@ PYBIND11_MODULE(psdr_cuda, m) {
     py::class_<DirectIntegrator, Integrator>(m, "DirectIntegrator")
         .def(py::init<int, int>(), "bsdf_samples"_a = 1, "light_samples"_a = 1)
         .def_readwrite("hide_emitters", &DirectIntegrator::m_hide_emitters);
+
+    py::class_<DirectLightingIntegrator, DirectIntegrator>(m, "DirectLightingIntegrator")
+        .def(py::init<int, int>(), "bsdf_samples"_a = 1, "light_samples"_a = 1);
 }

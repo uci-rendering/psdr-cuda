@@ -9,7 +9,7 @@
 #include <psdr/shape/mesh.h>
 #include <psdr/scene/scene.h>
 #include <psdr/sensor/perspective.h>
-#include <psdr/integrator/direct.h>
+#include <psdr/integrator/directlighting.h>
 
 namespace psdr
 {
@@ -21,30 +21,23 @@ static inline Float<ad> mis_weight(const Float<ad> &pdf1, const Float<ad> &pdf2)
 }
 
 
-DirectIntegrator::~DirectIntegrator() {
-    for ( auto *item : m_warpper ) {
-        if ( item != nullptr ) delete item;
-    }
-}
-
-
-DirectIntegrator::DirectIntegrator(int bsdf_samples, int light_samples) : m_bsdf_samples(bsdf_samples), m_light_samples(light_samples) {
+DirectLightingIntegrator::DirectLightingIntegrator(int bsdf_samples, int light_samples) : DirectIntegrator(bsdf_samples, light_samples) {
     PSDR_ASSERT((bsdf_samples >= 0) && (light_samples >= 0) && (bsdf_samples + light_samples > 0));
 }
 
 
-SpectrumC DirectIntegrator::Li(const Scene &scene, Sampler &sampler, const RayC &ray, MaskC active) const {
+SpectrumC DirectLightingIntegrator::Li(const Scene &scene, Sampler &sampler, const RayC &ray, MaskC active) const {
     return __Li<false>(scene, sampler, ray, active);
 }
 
 
-SpectrumD DirectIntegrator::Li(const Scene &scene, Sampler &sampler, const RayD &ray, MaskD active) const {
+SpectrumD DirectLightingIntegrator::Li(const Scene &scene, Sampler &sampler, const RayD &ray, MaskD active) const {
     return __Li<true>(scene, sampler, ray, active);
 }
 
 
 template <bool ad>
-Spectrum<ad> DirectIntegrator::__Li(const Scene &scene, Sampler &sampler, const Ray<ad> &ray, Mask<ad> active) const {
+Spectrum<ad> DirectLightingIntegrator::__Li(const Scene &scene, Sampler &sampler, const Ray<ad> &ray, Mask<ad> active) const {
     Intersection<ad> its = scene.ray_intersect<ad>(ray, active);
     active &= its.is_valid();
 
@@ -83,21 +76,20 @@ Spectrum<ad> DirectIntegrator::__Li(const Scene &scene, Sampler &sampler, const 
             if constexpr ( ad ) {
                 Vector3fD wo = its1.p - its.p;
                 wo /= its1.t;
-
-                if ( bsdf != nullptr ) {
-                    bsdf_val = bsdf->eval(its, its.sh_frame.to_local(wo), active1);
-                } else {
-                    bsdf_val = bsdf_array->eval(its, its.sh_frame.to_local(wo), active1);
-                }
-                FloatD cos_val = dot(its1.n, -wo);
-                FloatD G_val = abs(cos_val)/sqr(its1.t);
-                pdf0 = bs.pdf*detach(G_val);
-                bsdf_val *= G_val*its1.J/pdf0;
+                 if ( bsdf != nullptr ) {
+                     bsdf_val = bsdf->eval_demod(its, its.sh_frame.to_local(wo), active1);
+                 } else {
+                     bsdf_val = bsdf_array->eval_demod(its, its.sh_frame.to_local(wo), active1);
+                 }
+                 FloatD cos_val = dot(its1.n, -wo);
+                 FloatD G_val = abs(cos_val)/sqr(its1.t);
+                 pdf0 = bs.pdf*detach(G_val);
+                 bsdf_val *= G_val*its1.J/pdf0;
             } else {
                 if ( bsdf != nullptr ) {
-                    bsdf_val = bsdf->eval(its, bs.wo, active1);
+                    bsdf_val = bsdf->eval_demod(its, bs.wo, active1);
                 } else {
-                    bsdf_val = bsdf_array->eval(its, bs.wo, active1);
+                    bsdf_val = bsdf_array->eval_demod(its, bs.wo, active1);
                 }
                 FloatC cos_val = dot(its1.n, -ray1.d);
                 FloatC G_val = abs(cos_val)/sqr(its1.t);
@@ -137,10 +129,10 @@ Spectrum<ad> DirectIntegrator::__Li(const Scene &scene, Sampler &sampler, const 
             Float<ad> pdf1;
             Vector3f<ad> wo_local = its.sh_frame.to_local(wo);
             if ( bsdf != nullptr ) {
-                bsdf_val = bsdf->eval(its, wo_local, active1);
+                bsdf_val = bsdf->eval_demod(its, wo_local, active1);
                 pdf1 = bsdf->pdf(its, wo_local, active1);
             } else {
-                bsdf_val = bsdf_array->eval(its, wo_local, active1);
+                bsdf_val = bsdf_array->eval_demod(its, wo_local, active1);
                 pdf1 = bsdf_array->pdf(its, wo_local, active1);
             }
             bsdf_val *= G_val*ps.J/ps.pdf;
@@ -163,83 +155,25 @@ Spectrum<ad> DirectIntegrator::__Li(const Scene &scene, Sampler &sampler, const 
 }
 
 
-void DirectIntegrator::preprocess_secondary_edges(const Scene &scene, int sensor_id, const ScalarVector4i &reso, int nrounds) {
-    PSDR_ASSERT(nrounds > 0);
-    PSDR_ASSERT_MSG(scene.is_ready(), "Scene needs to be configured!");
-
-    if ( static_cast<int>(m_warpper.size()) != scene.m_num_sensors )
-        m_warpper.resize(scene.m_num_sensors, nullptr);
-
-    if ( m_warpper[sensor_id] == nullptr )
-        m_warpper[sensor_id] = new HyperCubeDistribution3f();
-    auto warpper = m_warpper[sensor_id];
-
-    warpper->set_resolution(head<3>(reso));
-    int num_cells = warpper->m_num_cells;
-    const int64_t num_samples = static_cast<int64_t>(num_cells)*reso[3];
-    PSDR_ASSERT(num_samples <= std::numeric_limits<int>::max());
-
-    IntC idx = divisor<int>(reso[3])(arange<IntC>(num_samples));
-    Vector3iC sample_base = gather<Vector3iC>(warpper->m_cells, idx);
-
-    Sampler sampler;
-    sampler.seed(arange<UInt64C>(num_samples));
-
-    FloatC result = zero<FloatC>(num_cells);
-    for ( int j = 0; j < nrounds; ++j ) {
-        SpectrumC value0;
-        std::tie(std::ignore, value0) = eval_secondary_edgeC(scene, *scene.m_sensors[sensor_id],
-                                                                   (sample_base + sampler.next_nd<3, false>())*warpper->m_unit);
-        masked(value0, ~enoki::isfinite<SpectrumC>(value0)) = 0.f;
-        if ( likely(reso[3] > 1) ) {
-            value0 /= static_cast<float>(reso[3]);
-        }
-        //PSDR_ASSERT(all(hmin(value0) > -Epsilon));
-        scatter_add(result, hmax(value0), idx);
-    }
-    if ( nrounds > 1 ) result /= static_cast<float>(nrounds);
-    warpper->set_mass(result);
-
-    cuda_eval(); cuda_sync();
-}
-
-
-void DirectIntegrator::render_secondary_edges(const Scene &scene, int sensor_id, SpectrumD &result) const {
-    const RenderOption &opts = scene.m_opts;
-
-    Vector3fC sample3 = scene.m_samplers[2].next_nd<3, false>();
-    FloatC pdf0 = (m_warpper.empty() || m_warpper[sensor_id] == nullptr) ?
-                  1.f : m_warpper[sensor_id]->sample_reuse(sample3);
-
-    auto [idx, value] = eval_secondary_edgeD(scene, *scene.m_sensors[sensor_id], sample3);
-    masked(value, ~enoki::isfinite<SpectrumD>(value)) = 0.f;
-    masked(value, pdf0 > Epsilon) /= pdf0;
-    if ( likely(opts.sppse > 1) ) {
-        value /= static_cast<float>(opts.sppse);
-    }
-    scatter_add(result, value, IntD(idx), idx >= 0);
-}
-
-
-std::pair<IntC, SpectrumC> DirectIntegrator::eval_secondary_edgeC(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3) const {
+std::pair<IntC, SpectrumC> DirectLightingIntegrator::eval_secondary_edgeC(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3) const {
     return __eval_secondary_edge<false>(scene, sensor, sample3);
 }
 
 
-std::pair<IntC, SpectrumD> DirectIntegrator::eval_secondary_edgeD(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3) const {
+std::pair<IntC, SpectrumD> DirectLightingIntegrator::eval_secondary_edgeD(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3) const {
     return __eval_secondary_edge<true>(scene, sensor, sample3);
 }
 
 
 template <bool ad>
-std::pair<IntC, Spectrum<ad>> DirectIntegrator::__eval_secondary_edge(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3) const {
+std::pair<IntC, Spectrum<ad>> DirectLightingIntegrator::__eval_secondary_edge(const Scene &scene, const Sensor &sensor, const Vector3fC &sample3) const {
     BoundarySegSampleDirect bss = scene.sample_boundary_segment_direct(sample3);
     MaskC valid = bss.is_valid;
 
     // _p0 on a face edge, _p2 on an emitter
     const Vector3fC &_p0    = detach(bss.p0);
     Vector3fC       &_p2    = bss.p2,
-                    _dir    = normalize(_p2 - _p0);
+    _dir    = normalize(_p2 - _p0);
 
     // check visibility between _p0 and _p2
     IntersectionC _its2;
@@ -275,7 +209,7 @@ std::pair<IntC, Spectrum<ad>> DirectIntegrator::__eval_secondary_edge(const Scen
 
     // calculate base_value
     FloatC      dist    = norm(_p2 - _p1),
-                cos2    = abs(dot(bss.n, -_dir));
+    cos2    = abs(dot(bss.n, -_dir));
     Vector3fC   e       = cross(bss.edge, _dir);
     FloatC      sinphi  = norm(e);
     Vector3fC   proj    = normalize(cross(e, bss.n));
@@ -294,10 +228,10 @@ std::pair<IntC, Spectrum<ad>> DirectIntegrator::__eval_secondary_edge(const Scen
     Vector3fC d0_local = _its1.sh_frame.to_local(d0);
     if ( scene.m_bsdfs.size() == 1U || scene.m_meshes.size() == 1U ) {
         const BSDF *bsdf = scene.m_meshes[0]->m_bsdf;
-        bsdf_val = bsdf->eval(_its1, d0_local, valid);
+        bsdf_val = bsdf->eval_demod(_its1, d0_local, valid);
     } else {
         BSDFArrayC bsdf_array = _its1.shape->bsdf(valid);
-        bsdf_val = bsdf_array->eval(_its1, d0_local, valid);
+        bsdf_val = bsdf_array->eval_demod(_its1, d0_local, valid);
     }
     // accounting for BSDF's asymmetry caused by shading normals
     FloatC correction = abs((_its1.wi.z()*dot(d0, _its1.n))/(d0_local.z()*dot(_dir, _its1.n)));
@@ -309,8 +243,8 @@ std::pair<IntC, Spectrum<ad>> DirectIntegrator::__eval_secondary_edge(const Scen
         value0 *= sign(dot(e, bss.edge2))*sign(dot(e, n));
 
         const Vector3fD &v0 = tri_info.p0,
-                        &e1 = tri_info.e1,
-                        &e2 = tri_info.e2;
+        &e1 = tri_info.e1,
+        &e2 = tri_info.e2;
 
         RayD shadow_ray(its1.p, normalize(bss.p0 - its1.p));
         Vector2fD uv;
@@ -325,4 +259,4 @@ std::pair<IntC, Spectrum<ad>> DirectIntegrator::__eval_secondary_edge(const Scen
     }
 }
 
-} // namespace psdr
+}

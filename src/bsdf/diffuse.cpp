@@ -1,6 +1,7 @@
 #include <psdr/core/bitmap.h>
 #include <psdr/core/warp.h>
 #include <psdr/bsdf/diffuse.h>
+#include <psdr/shape/mesh.h>
 
 namespace psdr
 {
@@ -28,7 +29,8 @@ Spectrum<ad> Diffuse::__eval(const Intersection<ad> &its, const Vector3f<ad> &wo
 
     active &= (cos_theta_i > 0.f && cos_theta_o > 0.f);
 
-    Spectrum<ad> value = m_reflectance.eval<ad>(its.uv) * InvPi * cos_theta_o;
+    Spectrum<ad> value = m_reflectance.sample<ad>(its, active) * InvPi * cos_theta_o;
+
     return value & active;
 }
 
@@ -78,6 +80,45 @@ Float<ad> Diffuse::__pdf(const Intersection<ad> &its, const Vector3f<ad> &wo, Ma
     active &= (cos_theta_i > 0.f && cos_theta_o > 0.f);
 
     Float<ad> value = InvPi * cos_theta_o;
+    return value & active;
+}
+
+
+SpectrumC Diffuse::albedo(const IntersectionC &its, MaskC active) const {
+    return __albedo<false>(its, active);
+}
+
+
+SpectrumD Diffuse::albedo(const IntersectionD &its, MaskD active) const {
+    return __albedo<true>(its, active);
+}
+
+
+template <bool ad>
+Spectrum<ad> Diffuse::__albedo(const Intersection<ad> &its, Mask<ad> active) const {
+    return m_reflectance.sample<ad>(its, active) & active;
+}
+
+
+SpectrumC Diffuse::eval_demod(const IntersectionC &its, const Vector3fC &wo, MaskC active) const {
+    return __eval_demod<false>(its, wo, active);
+}
+
+
+SpectrumD Diffuse::eval_demod(const IntersectionD &its, const Vector3fD &wo, MaskD active) const {
+    return __eval_demod<true>(its, wo, active);
+}
+
+
+template <bool ad>
+Spectrum<ad> Diffuse::__eval_demod(const Intersection<ad> &its, const Vector3f<ad> &wo, Mask<ad> active) const {
+    Float<ad> cos_theta_i = Frame<ad>::cos_theta(its.wi),
+            cos_theta_o = Frame<ad>::cos_theta(wo);
+
+    active &= (cos_theta_i > 0.f && cos_theta_o > 0.f);
+
+    Spectrum<ad> value = InvPi * cos_theta_o;
+
     return value & active;
 }
 

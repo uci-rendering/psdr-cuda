@@ -89,6 +89,37 @@ typename Bitmap<channels>::template Value<ad> Bitmap<channels>::eval(Vector2f<ad
 }
 
 
+template <int channels>
+template <bool ad>
+typename Bitmap<channels>::template Value<ad> Bitmap<channels>::at(Int<ad> idx) const {
+    const int width = m_resolution.x(), height = m_resolution.y();
+    if( !all(idx < width * height) )
+        throw Exception("Bitmap: out-of-bound access!");
+
+    if constexpr( ad )
+        return gather<ValueD>(m_data, idx);
+    else
+        return gather<ValueC>(detach(m_data), idx);
+}
+
+
+template <int channels>
+template <bool ad>
+typename Bitmap<channels>::template Value<ad> Bitmap<channels>::sample(const Intersection<ad> &its, Mask<ad> active) const {
+    Value<ad> value;
+    if( m_resolution.x() == 1 && m_resolution.y() > 1 ) {
+        Value<ad> c0 = at<ad>(its.v0_idx & active);
+        Value<ad> c1 = at<ad>(its.v1_idx & active);
+        Value<ad> c2 = at<ad>(its.v2_idx & active);
+        const auto& st = its.barycentric_uv & active;
+        value = fmadd(c1-c0, st.x(), fmadd(c2-c0, st.y(), c0));
+    }
+    else
+        value = eval<ad>(its.uv);
+    return value & active;
+}
+
+
 // Explicit instantiations
 template struct Bitmap<1>;
 template struct Bitmap<3>;
@@ -98,5 +129,17 @@ template FloatD Bitmap<1>::eval<true>(Vector2fD, bool) const;
 
 template Vector3fC Bitmap<3>::eval<false>(Vector2fC, bool) const;
 template Vector3fD Bitmap<3>::eval<true>(Vector2fD, bool) const;
+
+template FloatC Bitmap<1>::at<false>(IntC) const;
+template FloatD Bitmap<1>::at<true>(IntD) const;
+
+template Vector3fC Bitmap<3>::at<false>(IntC) const;
+template Vector3fD Bitmap<3>::at<true>(IntD) const;
+
+template FloatC Bitmap<1>::sample<false>(const IntersectionC &its, MaskC active) const;
+template FloatD Bitmap<1>::sample<true>(const IntersectionD &its, MaskD active) const;
+
+template Vector3fC Bitmap<3>::sample<false>(const IntersectionC &its, MaskC active) const;
+template Vector3fD Bitmap<3>::sample<true>(const IntersectionD &its, MaskD active) const;
 
 } // namespace psdr

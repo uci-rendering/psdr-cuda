@@ -53,6 +53,35 @@ void Scene::load_string(const char *scene_xml, bool auto_configure) {
 }
 
 
+void Scene::reload_mesh(Mesh& mesh, const char *file_name, bool verbose) {
+    mesh.load(file_name, verbose);
+    if ( m_has_bound_mesh ) {
+        Mesh* bound_mesh = m_meshes.back();
+        delete bound_mesh;
+        m_meshes.pop_back();
+        m_num_meshes--;
+        m_has_bound_mesh = false;
+    }
+    delete m_optix;
+    m_optix = new Scene_OptiX();
+}
+
+
+void Scene::reload_mesh_mem(Mesh &mesh, const Vector3fD &vertex_positions, const Vector3iD &face_indices,
+                            const Vector2fD &vertex_uv, const Vector3iD &face_uv_indices, bool verbose) {
+    mesh.load_mem(vertex_positions, face_indices, vertex_uv, face_uv_indices, verbose);
+    if ( m_has_bound_mesh ) {
+        Mesh* bound_mesh = m_meshes.back();
+        delete bound_mesh;
+        m_meshes.pop_back();
+        m_num_meshes--;
+        m_has_bound_mesh = false;
+    }
+    delete m_optix;
+    m_optix = new Scene_OptiX();
+}
+
+
 void Scene::configure() {
     PSDR_ASSERT_MSG(m_loaded, "Scene not loaded yet!");
     PSDR_ASSERT(m_num_sensors == static_cast<int>(m_sensors.size()));
@@ -300,6 +329,10 @@ Intersection<ad> Scene::ray_intersect(const Ray<ad> &ray, Mask<ad> active, Trian
         tri_info = gather<TriangleInfoD>(m_triangle_info, idx[1], active);
         if ( out_info != nullptr ) *out_info = tri_info;
 
+        its.v0_idx = tri_info.v0_idx;
+        its.v1_idx = tri_info.v1_idx;
+        its.v2_idx = tri_info.v2_idx;
+
         tri_uv_info = gather<TriangleUVD>(m_triangle_uv, idx[1], active);
         face_normal_mask = gather<MaskD>(m_triangle_face_normals, idx[1], active);
         if constexpr ( path_space ) {
@@ -315,6 +348,10 @@ Intersection<ad> Scene::ray_intersect(const Ray<ad> &ray, Mask<ad> active, Trian
             tri_info = gather<TriangleInfoC>(detach(m_triangle_info), idx[1], active);
         }
 
+        its.v0_idx = tri_info.v0_idx;
+        its.v1_idx = tri_info.v1_idx;
+        its.v2_idx = tri_info.v2_idx;
+
         tri_uv_info = gather<TriangleUVC>(detach(m_triangle_uv), idx[1], active);
         face_normal_mask = gather<MaskC>(detach(m_triangle_face_normals), idx[1], active);
         its.J = 1.f;
@@ -326,6 +363,8 @@ Intersection<ad> Scene::ray_intersect(const Ray<ad> &ray, Mask<ad> active, Trian
     if constexpr ( !ad || path_space ) {
         // Path-space formulation
         const Vector2fC &uv = m_optix->m_its.uv;
+
+        its.barycentric_uv = uv;
 
         //Vector3f<ad> sh_n = normalize(fmadd(tri_info.n0, 1.f - u - v, fmadd(tri_info.n1, u, tri_info.n2*v)));
         Vector3f<ad> sh_n = normalize(bilinear<ad>(tri_info.n0,
@@ -355,6 +394,8 @@ Intersection<ad> Scene::ray_intersect(const Ray<ad> &ray, Mask<ad> active, Trian
     } else {
         // Standard (solid-angle) formulation
         auto [uv, t] = ray_intersect_triangle<true>(vertex0, edge1, edge2, ray);
+
+        its.barycentric_uv = uv;
 
         //Vector3f<ad> sh_n = normalize(fmadd(tri_info.n0, 1.f - u_d - v_d, fmadd(tri_info.n1, u_d, tri_info.n2*v_d)));
         Vector3fD sh_n = normalize(bilinear<true>(tri_info.n0,

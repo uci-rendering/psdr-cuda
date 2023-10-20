@@ -58,6 +58,12 @@ ENOKI_INLINE Vector2f<ad> bilinear2(const Vector2f<ad> &p0, const Vector2f<ad> &
 
 
 template <bool ad>
+ENOKI_INLINE Float<ad> bilinear_scalar(const Float<ad> &p0, const Float<ad> &e1, const Float<ad> &e2, const Vector2f<ad> &st) {
+    return fmadd(e1, st.x(), fmadd(e2, st.y(), p0));
+}
+
+
+template <bool ad>
 ENOKI_INLINE Float<ad> rgb2luminance(const Vector3f<ad> &rgb) {
     return rgb.x()*.2126f + rgb.y()*.7152f + rgb.z()*.0722f;
 }

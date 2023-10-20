@@ -19,6 +19,11 @@ public:
     void load_file(const char *file_name, bool auto_configure = true);
     void load_string(const char *scene_xml, bool auto_configure = true);
 
+    void reload_mesh(Mesh& mesh, const char *file_name, bool verbose=false);
+    void reload_mesh_mem(Mesh& mesh, const Vector3fD &vertex_positions, const Vector3iD &face_indices,
+                         const Vector2fD &vertex_uv = Vector2fD(), const Vector3iD &face_uv_indices = Vector3iD(),
+                         bool verbose=false);
+
     void configure();
     bool is_ready() const;
 

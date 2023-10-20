@@ -43,6 +43,11 @@ static std::pair<TriangleInfo<ad>, Vector3f<ad>> process_mesh(const Vector3f<ad>
     triangles.n1 = gather<Vector3f<ad>>(vertex_normals, face_indices[1]);
     triangles.n2 = gather<Vector3f<ad>>(vertex_normals, face_indices[2]);
 
+    // Store the index of each vertex
+    triangles.v0_idx = face_indices[0];
+    triangles.v1_idx = face_indices[1];
+    triangles.v2_idx = face_indices[2];
+
     // Normalize the face normals
     face_normals /= face_areas;
     face_areas *= 0.5f;
@@ -206,6 +211,93 @@ void Mesh::load(const char *fname, bool verbose) {
         std::cout << "Loaded " << m_num_vertices << " vertices, "
                                << m_num_faces    << " faces, "
                                << m_num_edges    << " edges. " << std::endl;
+    }
+
+    m_ready = false;
+}
+
+
+void Mesh::load_mem(const Vector3fD &vertex_positions, const Vector3iD &face_indices,
+                    const Vector2fD &vertex_uv, const Vector3iD &face_uv_indices, bool verbose) {
+    m_num_vertices = slices(vertex_positions);
+    m_vertex_positions_raw = vertex_positions;
+
+    m_num_faces = slices(face_indices);
+    m_face_indices = face_indices;
+
+#ifdef PSDR_MESH_ENABLE_1D_VERTEX_OFFSET
+    m_vertex_offset = zero<FloatD>(m_num_vertices);
+#endif
+
+   m_has_uv = slices(vertex_uv) != 0;
+   m_vertex_uv = vertex_uv;
+   m_face_uv_indices = face_uv_indices;
+
+    // Constructing edge list
+
+    int m_num_edges = 0;
+    if ( m_enable_edges ) {
+        std::vector<int> buffers[5];
+        buffers[0].reserve(3*m_num_faces);
+        buffers[1].reserve(3*m_num_faces);
+        buffers[2].reserve(3*m_num_faces);
+        buffers[3].reserve(3*m_num_faces);
+        buffers[4].reserve(3*m_num_faces);
+
+        std::array<std::vector<int32_t>, 3> faces;
+        copy_cuda_array<int32_t, 3>(detach(m_face_indices), faces);
+
+        std::map<std::pair<int, int>, std::vector<int>> edge_map;
+        for ( size_t f = 0; f < static_cast<size_t>(m_num_faces); ++f ) {
+            for ( int i = 0; i < 3; ++i) {
+                int k1 = i, k2 = (i + 1) % 3, k3 = (i + 2) % 3;
+                int idx1 = faces[k1][f];
+                int idx2 = faces[k2][f];
+                int idx3 = faces[k3][f];
+                auto key = idx1 < idx2 ?
+                           std::make_pair(idx1, idx2) : std::make_pair(idx2, idx1);
+                if (edge_map.find(key) == edge_map.end()) {
+                    auto it = edge_map.insert(edge_map.end(), {key, std::vector<int>()});
+                    it->second.push_back(idx3);
+                }
+                edge_map[key].push_back(static_cast<int>(f));
+            }
+        }
+
+        for ( auto it: edge_map ) {
+            if ( it.second.size() > 3 ) {
+                // Non-manifold mesh is not allowed
+                PSDR_ASSERT_MSG(false, std::string("Edge shared by more than 2 faces: "));
+            } else {
+                buffers[0].push_back(it.first.first);
+                buffers[1].push_back(it.first.second);
+                if ( it.second.size() == 3 ) {
+                    PSDR_ASSERT_MSG(it.second[1] != it.second[2], std::string("Duplicated faces: "));
+                    buffers[2].push_back(it.second[1]);
+                    buffers[3].push_back(it.second[2]);
+                    buffers[4].push_back(it.second[0]);
+                    ++m_num_edges;
+                } else {
+                    PSDR_ASSERT_MSG(it.second.size() == 2, std::string("Edge should be boundary: "));
+                    buffers[2].push_back(it.second[1]);
+                    buffers[3].push_back(-1);
+                    buffers[4].push_back(it.second[0]);
+                    ++m_num_edges;
+                }
+            }
+        }
+
+        m_edge_indices = Vectori<5, true>(IntD::copy(buffers[0].data(), m_num_edges),
+                                          IntD::copy(buffers[1].data(), m_num_edges),
+                                          IntD::copy(buffers[2].data(), m_num_edges),
+                                          IntD::copy(buffers[3].data(), m_num_edges),
+                                          IntD::copy(buffers[4].data(), m_num_edges));
+    }
+
+    if ( verbose ) {
+        std::cout << "Loaded " << m_num_vertices << " vertices, "
+                  << m_num_faces    << " faces, "
+                  << m_num_edges    << " edges. " << std::endl;
     }
 
     m_ready = false;
